@@ -1,0 +1,3 @@
+useDynLib(GeneticsFace)
+exportPattern("^[[:alpha:]]+")
+import(methods, Rcpp)
