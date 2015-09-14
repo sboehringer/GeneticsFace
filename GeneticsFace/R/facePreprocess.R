@@ -2,18 +2,23 @@
 #	facePreprocess.R
 #Mon Aug 31 12:18:52 CEST 2015
 
+convertImage = function(input, output, quality = 80L) {
+	cmd = Sprintf("convert -quality %{quality}s %{input}Q %{output}Q");
+	System(cmd, 3);
+}
+
 convertImages = function(path, output, extension = 'jpg', quality = 80L) {
 	files = list_files_with_exts(path, extension);
+	Dir.create(output, recursive = TRUE);
 	r = lapply(files, function(path){
 		file = splitPath(path)$file;
-		cmd = Sprintf("convert -quality %{quality}s %{path}Q %{output}Q/%{file}Q");
-		System(cmd, 3);
+		convertImage(path, Sprintf("%{output}s/%{file}s"), quality);
 	});
 	r
 }
 
 listImages = function(path, extension = 'jpg')list_files_with_exts(path, extension);
-readImages = function(path, extension, ...)lapply(listImages(path, extension), function(file)readImage(file));
+readImages = function(path, extension = 'jpg', ...)lapply(listImages(path, extension), function(file)readImage(file));
 images2grey = function(is)lapply(is, function(i)channel(i, 'gray'))
 
 readCoordinatesFromFile = function(path, path2metaRegex = NULL, reader = readCoordinateFile_visigen) {
@@ -53,6 +58,7 @@ table2array = function(d, id = 'id', coords = c('x', 'y'), node = 'node') {
 	print(nodes);
 	a = array(d1$value, c(length(coords), length(nodes), length(ids)));
 	a = aperm(a, c(2, 1, 3));
+	dimnames(a)[[3]] = levels(d$id);
 	a
 }
 
@@ -202,7 +208,7 @@ pictureMap2output = function(aff, outputDim, scale = 1) {
 #' @arg recenter: assume aff is centered around the origin, recenter to middle coordinate of the picture
 pictureTransform = function(path, aff, outputDir, outputDim = pictureDimensions(path),
 	extraArgs = '-type Grayscale', recenter = T, scale = 1, quality = .9) {
-	Dir.create(outputDir);
+	Dir.create(outputDir, recursive = TRUE);
 	file = splitPath(path)$file;
 
 	aff = pictureMap2output(aff, outputDim, scale);
@@ -248,27 +254,40 @@ scaleFromBoundingBox = function(bb, dimTarget = rep(512, 2), margin = .05) {
 	scale
 }
 
-procrustesTransformImages = function(path, outputDirPrefix = con(path, '_conv'),
-	readCoordinates = readCoordinateData_visigen,
-	annotate = T, dimTarget = rep(512, 2), margin = .05) {
+procrustesTransformImages = function(path, output,
+	outputDirRaw = con(output, '/00_raw'),
+	outputDirAnnotation = con(output, '/01_annotated'),
+	outputDirTransform = con(output, '/02_transformed'),
+	outputDirAnnotationTransf = con(output, '/03_transformed_annotated'),
+	readCoordinates = readCoordinateData,
+	annotate = T, dimTarget = rep(512, 2), margin = .05, ...) {
 
-	d = readCoordinates(path);
+	convertImages(path, outputDirRaw);
+	d = readCoordinates(path, ...);
 	a = table2array(d);
 	pa = performProcrustes(a);
 	scale = scaleFromBoundingBox(boundingBox(pa$rotated), dimTarget, margin);
 
 	ip = listImages(path);
-	if (annotate) pictureAnnotate(ip[1], a[, , 1], 'data/picturesAnnot');
-	aff = affineBetween(a[, , 1], pa$rotated[, , 1]);
-	rot = affine2components(aff);
-	#rot$rot[1] = 20/360 * (2 * pi);
-	aff = components2affine(rot);
-	pictureTransform(ip[1], aff, 'data/picturesProc', outputDim = dimTarget, scale = scale);
-	pdim = pictureDimensions(ip[1]);
+	ilapply(ip, function(path, i) {
+		file = splitPath(path)$file;
+		pdim = pictureDimensions(path);
+		if (annotate) pictureAnnotate(path, a[, , i], outputDirAnnotation);
 
-	affImg = pictureMap2output(aff, dimTarget, scale);
-	paCoords = homI(hom(a[,,1]) %*% affImg);
-	pictureAnnotate(Sprintf('data/picturesProc/%{file}Q', file = splitPath(ip[1])$file),
-		paCoords, 'data/picturesProcAnnot');
-	
+		aff = affineBetween(a[, , i], pa$rotated[, , i]);
+		rot = affine2components(aff);
+		#rot$rot[1] = 20/360 * (2 * pi);
+		aff = components2affine(rot);
+		pictureTransform(path, aff, outputDirTransform, outputDim = dimTarget, scale = scale);
+
+		affImg = pictureMap2output(aff, dimTarget, scale);
+		paCoords = homI(hom(a[, , i]) %*% affImg);
+		if (annotate) pictureAnnotate(
+			Sprintf('%{outputDirTransform}s/%{file}s'), paCoords, outputDirAnnotationTransf);
+	});
+	r = list(images = ip, input = path, output = output,
+		outputDirRaw = outputDirRaw, outputDirAnnotation = outputDirAnnotation,
+		outputDirTransform = outputDirTransform, outputDirAnnotationTransf = outputDirAnnotationTransf
+	);
+	r
 }

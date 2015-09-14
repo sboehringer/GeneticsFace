@@ -65,12 +65,14 @@ coordinateStructure_ini = function(graph, rootName = 'ModelGraph', asDocument = 
 	names(graphL) = rep('Node', length(graphL));
 	graphStructureL$NumberOfNodes = nrow(graph);
 	graphStructureL$NodeList = graphL;
-	list2xml(graphStructureL, rootName = rootName, asDocument = asDocument);
+	r = list2xml(graphStructureL, rootName = rootName, asDocument = asDocument);
+	r
 }
 
 writeCoordinateFile_ini = function(graph, output = NULL) {
 	header = '<?xml version="1.0"?>';
-	coordinateStructure_ini(graph);
+	ini = coordinateStructure_ini(graph);
+	if (!is.null(output)) Dir.create(output, recursive = TRUE, treatPathAsFile = TRUE);
 	saveXML(ini, output);
 }
 
@@ -81,14 +83,17 @@ readCoordinateFile_ini = function(path, input) {
 	);
 }
 
-prepareAveraging_ini = function(pathImg, output,
-	pathGraph = Sprintf('%{base}s.xml', base = splitPath(pathImg)$fullbase) {
+prepareAveraging_ini = function(pathImg, coords, output,
+	pathImgConverted = Sprintf('%{output}s/%{base}s.tif', base = splitPath(pathImg)$base),
+	pathGraph = Sprintf('%{output}s/%{base}s.xml', base = splitPath(pathImg)$base)) {
 
-	if (file.info(output)$isdir) output = Sprintf('%{output}s/%{base}s', base = splitPath(pathImg)$base);
+	writeCoordinateFile_ini(coords, output = pathGraph);
+	convertImage(pathImg, pathImgConverted);
+
 	cmd = Sprintf(con('ini_X64 --extract-jets ',
 		'--input-graph %{pathGraph}Q ',
-		'--input-image %{pathImg}Q.tif ',
-		'--output-graph %{output}Q'));
+		'--input-image %{pathImgConverted}Q ',
+		'--output-graph %{pathGraph}Q'));
 	Log(cmd, 2);
 	System(cmd, 2);
 }
