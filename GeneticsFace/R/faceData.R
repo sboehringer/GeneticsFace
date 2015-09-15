@@ -6,6 +6,41 @@
 #	<p> visigen file format
 #
 
+symmetry_visigenStd = matrix(c(
+	'k1', 'k1',
+	'k2', 'k3',
+	'k4', 'k5',
+	'k6', 'k10',
+	'k7', 'k9',
+	'k8', 'k8',
+	'k11', 'k14',
+	'k12', 'k13',
+	'k16', 'k20',
+	'k22', 'k29',
+	'k24', 'k27',
+	'k17', 'k19',
+	'k23', 'k28',
+	'k15', 'k21',
+	'k25', 'k26',
+	'k30', 'k33',
+	'k18', 'k18',
+	'k31', 'k32',
+	'k34', 'k38',
+	'k35', 'k37',
+	'k36', 'k36',
+	'k39', 'k42',
+	'k40', 'k41',
+	'k43', 'k47',
+	'k45', 'k45',
+	'k44', 'k46',
+	'k48', 'k48',
+	'k51', 'k51',
+	'k49', 'k53',
+	'k50', 'k52',
+	'k54', 'k54'
+), byrow = T, ncol = 2);
+Nsymmetry_visigenStd = length(unique(as.vector(symmetry_visigenStd)));
+
 readCoordinateFile_visigen = function(path) {
 	readTable(sprintf('[SEP=T,HEADER=F,NAMES=node;x;y]:%s', path));
 }
@@ -90,10 +125,32 @@ prepareAveraging_ini = function(pathImg, coords, output,
 	writeCoordinateFile_ini(coords, output = pathGraph);
 	convertImage(pathImg, pathImgConverted);
 
-	cmd = Sprintf(con('ini_X64 --extract-jets ',
+	cmd = Sprintf(con('ini_X64 --extract-jets --gabor-trafo-type Gray ',
 		'--input-graph %{pathGraph}Q ',
 		'--input-image %{pathImgConverted}Q ',
 		'--output-graph %{pathGraph}Q'));
-	Log(cmd, 2);
 	System(cmd, 2);
+}
+
+# size_x/.75
+averageGraphs_ini = function(collection, name, sel, output, size_x = 512, size_y = size_x, Niter = 0L) {
+	Dir.create(output, recursive = T);
+	# <p> average
+	averagingInput = collection$outputDirAveragingPrepare;
+	averageGraph = Sprintf('%{output}Q/%{name}Q.xml');
+	averageGraphs = join(sapply(sel, function(id)Sprintf('%{averagingInput}Q/%{id}Q.xml')), "\n");
+	averageGraphList = tempfile();
+	writeFile(averageGraphList, averageGraphs);
+	cmd = Sprintf(con('ini_X64 --average-graphs ',
+		'--input-graph-list %{averageGraphList}Q ',
+		'--output-graph %{averageGraph}Q'));
+	System(cmd, 2);
+
+	# <p> reconstruct
+	cmd = Sprintf(con('ini_X64 --reconstruct --reconstruction-iterations %{Niter}s ',
+		'--reconstructed-image-size %{size_x}s,%{size_y}s ',
+		'--input-graph %{averageGraph}Q ',
+		'--output-image %{output}Q/%{name}Q.tif '));
+	System(cmd, 2);
+	convertImage(Sprintf('%{output}Q/%{name}Q.tif'), Sprintf('%{output}Q/%{name}Q.jpg'));
 }

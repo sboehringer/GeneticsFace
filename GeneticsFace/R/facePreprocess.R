@@ -36,15 +36,37 @@ readCoordinatesFromFile = function(path, path2metaRegex = NULL, reader = readCoo
 	d0
 }
 
+dataCheckNodeAlignment = function(data, stopIfUnaligned = TRUE) {
+	nodes = sapply(unique(data$id), function(id)data$node[data$id == id]);
+	unaligned = any(!apply(nodes, 1, function(e)all(e == e[1])));
+	if (stopIfUnaligned && unaligned) stop("Nodes in data set not in same order");
+	!unaligned
+}
+
+dataAlignNodes = function(data) {
+	d = data;
+	ids = unique(d$id);
+	nodesRef = d$node[d$id == ids[1]];
+	r1 = lapply(ids, function(id) {
+		nodesThis = d$node[d$id == id];
+		d[d$id == id, ][order_align(nodesRef, nodesThis), ];
+	});
+	d = do.call(rbind, r1);
+	dataCheckNodeAlignment(d);
+	list(coords = d, nodes = nodesRef)
+}
+
 #' @arg path Path to folder from which files with extension `pos` are parsed
 #' @arg path2metaRegex Provide regular expression that is applied to the path and caputres of which
 #'   are used as meta-information returned in the type column of the result data frame
 readCoordinateData = function(path, path2metaRegex = NULL, reader = readCoordinateFile_visigen) {
 	files = list_files_with_exts(path, 'pos');
 	r0 = lapply(files, readCoordinatesFromFile, reader = reader, path2metaRegex = path2metaRegex);
-	d = do.call(rbind, r0);
-	d = data.frame.types(d, factor = c('id', 'type', 'node'));
-	d
+	r1 = dataAlignNodes(do.call(rbind, r0));
+	# <p> return
+	d = data.frame.types(r1$coords, factor = c('id', 'type', 'node'));
+	r = list(coord = d, nodes = r1$nodes);
+	r
 }
 
 
@@ -178,6 +200,19 @@ affPerform = function(data, aff) {
 	affTranslate(affScale(affRotate(data, aff), aff), aff);
 }
 
+boundingBox = function(a) {
+	list(
+		xlim = c(min(a[, 1, ]), max(a[, 1, ])),
+		ylim = c(min(a[, 2, ]), max(a[, 2, ]))
+	)
+}
+boundingBoxSquared = function(bb, dim = 256, border = .1) {
+	# do not center
+	ext = max(abs(bb$xlim), abs(bb$ylim));
+	scale = dim * (1 - border) / ext;
+	scale
+}
+
 
 #
 #	GraphicsMagick
@@ -246,7 +281,7 @@ boundingBox = function(a) {
 }
 maxAbs = function(e, ...)max(abs(e), ...)
 ext = function(e)(e[2] - e[1])
-scaleFromBoundingBox = function(bb, dimTarget = rep(512, 2), margin = .05) {
+scaleFromBoundingBox = function(bb, dimTarget, margin = .05) {
 	dimMax = sapply(bb, maxAbs) * 2;
 	scaleD = (dimTarget * (1 - margin)) / dimMax;
 	# rescale to uniformly fit into target size
@@ -269,7 +304,7 @@ procrustesTransformImages = function(path, output,
 	scale = scaleFromBoundingBox(boundingBox(pa$rotated), dimTarget, margin);
 
 	ip = listImages(path);
-	ilapply(ip, function(path, i) {
+	coords = ilapply(ip, function(path, i) {
 		file = splitPath(path)$file;
 		pdim = pictureDimensions(path);
 		if (annotate) pictureAnnotate(path, a[, , i], outputDirAnnotation);
@@ -284,10 +319,38 @@ procrustesTransformImages = function(path, output,
 		paCoords = homI(hom(a[, , i]) %*% affImg);
 		if (annotate) pictureAnnotate(
 			Sprintf('%{outputDirTransform}s/%{file}s'), paCoords, outputDirAnnotationTransf);
+		paCoords
 	});
-	r = list(images = ip, input = path, output = output,
+	coords = array(unlist(coords), dim = c(dim(coords[[1]]), length(coords)));
+	ids = sapply(r$images, function(e)splitPath(e)$base);
+	r = list(id = ids,
+		coords = coords,
+		# paths
+		images = ip, input = path, output = output,
 		outputDirRaw = outputDirRaw, outputDirAnnotation = outputDirAnnotation,
 		outputDirTransform = outputDirTransform, outputDirAnnotationTransf = outputDirAnnotationTransf
 	);
+	r
+}
+
+prepareAveraging = function(collection, dataArray,
+	preparer = prepareAveraging_ini, output = con(collection$output, '/04_averaging_prepare'), ...) {
+	myoutput = output;
+
+	with(collection, {
+	ilapply(id, function(id, i)
+		preparer(Sprintf('%{outputDirTransform}s/%{id}s.jpg'), dataArray[, , i], output = myoutput, ...));
+	r = c(collection, list(outputDirAveragingPrepare = myoutput));
+	r
+})}
+
+averageGroups = function(collection, groups,
+	output = con(collection$output, '/05_averages'), averager = averageGraphs_ini) {
+	ls = levels(as.factor(groups));
+	sapply(ls, function(level) {
+		sel = collection$id[which(groups == level)];
+		averager(collection, level, sel, output);
+	});
+	r = c(collection, list(outputAverages = output));
 	r
 }
