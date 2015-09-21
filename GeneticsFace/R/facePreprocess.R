@@ -17,8 +17,9 @@ convertImages = function(path, output, extension = 'jpg', quality = 80L) {
 	r
 }
 
-listImages = function(path, extension = 'jpg')list_files_with_exts(path, extension);
-readImages = function(path, extension = 'jpg', ...)lapply(listImages(path, extension), function(file)readImage(file));
+defaultExts = c('jpg', 'jpeg', 'JPG', 'JPEG');
+listImages = function(path, extension = defaultExts)list_files_with_exts(path, extension);
+readImages = function(path, extension = defaultExts, ...)lapply(listImages(path, extension), function(file)readImage(file));
 images2grey = function(is)lapply(is, function(i)channel(i, 'gray'))
 
 readCoordinatesFromFile = function(path, path2metaRegex = NULL, reader = readCoordinateFile_visigen) {
@@ -77,9 +78,9 @@ table2array = function(d, id = 'id', coords = c('x', 'y'), node = 'node') {
 	nodeRows = rep(rep.each(nodes, length(coords)), length(ids));
 	d1 = reshape.long(d, coords);
 	if (any(d1$node != nodeRows)) stop('order of nodes inconsistent bewteen individuals');
-	print(nodes);
 	a = array(d1$value, c(length(coords), length(nodes), length(ids)));
 	a = aperm(a, c(2, 1, 3));
+	dimnames(a)[[1]] = nodes;
 	dimnames(a)[[3]] = levels(d$id);
 	a
 }
@@ -299,7 +300,7 @@ procrustesTransformImages = function(path, output,
 
 	convertImages(path, outputDirRaw);
 	d = readCoordinates(path, ...);
-	a = table2array(d);
+	a = table2array(d$coord);
 	pa = performProcrustes(a);
 	scale = scaleFromBoundingBox(boundingBox(pa$rotated), dimTarget, margin);
 
@@ -322,7 +323,8 @@ procrustesTransformImages = function(path, output,
 		paCoords
 	});
 	coords = array(unlist(coords), dim = c(dim(coords[[1]]), length(coords)));
-	ids = sapply(r$images, function(e)splitPath(e)$base);
+	dimnames(coords) = dimnames(a);
+	ids = sapply(ip, function(e)splitPath(e)$base);
 	r = list(id = ids,
 		coords = coords,
 		# paths
@@ -352,5 +354,43 @@ averageGroups = function(collection, groups,
 		averager(collection, level, sel, output);
 	});
 	r = c(collection, list(outputAverages = output));
+	r
+}
+
+#
+#	<p> graph pre-processing
+#
+
+symmetrizeGraph = function(graph, nodeSymmetries = symmetry_visigenStd) {
+	# <p> indeces and global midline
+	nodes = dimnames(graph)[[1]];
+	# indeces of nodes on the midline
+	midline = which.indeces(
+		nodeSymmetries[which(apply(nodeSymmetries, 1, function(nds)nds[1] == nds[2])), 1], nodes
+	);
+	# pairs of indeces for symmetric landmarks as matrix
+	symm = matrix(which.indeces(
+		as.vector(nodeSymmetries[which(apply(nodeSymmetries, 1, function(nds)nds[1] != nds[2])), ]), nodes
+	), ncol = 2);
+	# mean of midline landmarks
+	graph_midline = mean(graph[midline, 1]);
+	graphs = graph;	# symmetrized graph
+
+	# <p> adjust midline to "midline-center"
+	graphs[midline, 1] = graph_midline;
+
+	# <p> adjust symmetric nodes
+	graphsn = apply(symm, 1, function(sn) {
+		symmprep = rbind(
+			c(graph_midline - graph[sn[1], 1], graph[sn[1], 2]),
+			c(graph[sn[2], 1] - graph_midline, graph[sn[2], 2])
+		);
+		means = apply(symmprep, 2, mean);
+		symmetrized = c(graph_midline - means[1], means[2], means[1] + graph_midline, means[2]);
+		symmetrized		
+	});
+	graphs[as.vector(t(symm)), ] = matrix(as.vector(graphsn), byrow = T, ncol = 2);
+
+	r = list(graphs = graphs, grapha = graph - graphs, midline_x = graph_midline);
 	r
 }
