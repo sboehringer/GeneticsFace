@@ -3,7 +3,7 @@ Type: Package
 Title: Analysis of facial data with respect to genetic questions
 Version: 1.0
 Date: 2015-02-06
-Author: Stefan Boehringer
+Author: Stefan Boehringer, Brunilda Balliu, Manuel Günther, Rolf P Würtz
 Maintainer: Stefan Boehringer <r-packages@s-boehringer.org>
 Description: Implementation of classification and visualization.
 License: LGPL 2.0
