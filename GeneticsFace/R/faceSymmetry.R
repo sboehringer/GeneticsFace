@@ -37,6 +37,8 @@ graphSymmetry = function(graph, elements, direction = 1, eps = 1e-5, selfSymmetr
 	epairs = do.call(rbind, lapply(as.list(set_combn(Els, 2L)), unlist));
 	# self-symmetry
 	if (selfSymmetry) epairs = rbind(cbind(Els, Els), epairs);
+	# <p> establish canonical order
+	epairs = epairs[order(epairs[, 1]), ];
 	#epairs = t(sapply(as.list(set_combn(1:nrow(elements), 2L)), avu));
 	# determine symmetry
 	s = apply(epairs, 1, function(p) {
@@ -51,6 +53,56 @@ graphSymmetry = function(graph, elements, direction = 1, eps = 1e-5, selfSymmetr
 	dimnames(spairs)[[2]] = paste('symm', 1:2, sep = '');
 	spairs
 }
+
+#
+#	<p> areas/triangulation
+#
+#	In order to get full symmetry in the triangulation the so called lower paritiion (i.e. the left side)
+#	of the face is triangulated. This corresponds one-by-one to a triangulation fo the upper part
+#	creating a fully symmetric triangulation
+
+# get a graph segment based on a direction and a percentage of extend to be included
+graphPartition = function(graph, direction = 1, threshold = .5) {
+	rng = range(graph[, direction]);
+	thresholdAbs = rng[1] + (rng[2] - rng[1]) * threshold;
+	graphPart = which(graph[, direction] <= thresholdAbs);
+	graph[graphPart, ]
+}
+
+matrix2dict = function(m)listKeyValue(m[, 1], m[, 2])
+matrix2dictSymm = function(m) {
+	m0 = unique(rbind(m, cbind(m[, 2], m[, 1])));
+	listKeyValue(m0[, 1], m0[, 2])
+}
+
+# graph assumed to be symmterized
+delaunaySymm = function(graph, direction = 1) {
+	nodeSymm = graphSymmetry(graph, as.matrix(1:nrow(graph)), selfSymmetry = TRUE);
+	nodeSymmNs = matrix(rownames(graph)[nodeSymm], ncol = 2);	# by name
+	nodeSymmDict = matrix2dictSymm(nodeSymmNs);
+	# <p> using graphSymmetry has no canonical preference with respect to position (e.g. left/right)
+	# therefore graphPartition is used
+	# part = graph[nodeSymm[, 1], ];
+	part = graphPartition(graph, direction);
+	# <p> triangulate "left" part (i.e. everything below .5 range)
+	areas = delaunayn(part);
+	areasNs = matrix(rownames(part)[areas], ncol = 3);
+	# <p> add symmetric triangles (in terms of node names)
+	# <!> nodes w/o symmetry
+	# <A> uniqueness
+	areasSymmNs = nodeSymmDict[areasNs];
+	# <p> convert back to indeces
+	areasUnique = matrix(which.indeces(as.character(areasNs), rownames(graph)), ncol = 3);
+	areasSymm = matrix(which.indeces(as.character(areasSymmNs), rownames(graph)), ncol = 3);
+	areasAll = rbind(areasUnique, areasSymm);
+	r = list(areas = areasAll, symm = cbind(1:nrow(areasUnique), nrow(areasUnique) + (1:nrow(areasUnique))));
+	r
+}
+graphSymmetryAreas = function(graph, direction = 1)delaunaySymm(graph, direction = 1)$symm;
+
+#
+#	<p> exposed interface functions
+#
 
 graphSymmetries = function(graph, direction = 1) {
 	coords = 1:nrow(graph);
