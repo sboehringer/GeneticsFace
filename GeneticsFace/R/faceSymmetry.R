@@ -85,28 +85,38 @@ delaunaySymm = function(graph, direction = 1) {
 	# part = graph[nodeSymm[, 1], ];
 	part = graphPartition(graph, direction);
 	# <p> triangulate "left" part (i.e. everything below .5 range)
-	areas = delaunayn(part);
-	areasNs = matrix(rownames(part)[areas], ncol = 3);
+	triangles = delaunayn(part);
+	trianglesNs = matrix(rownames(part)[triangles], ncol = 3);
 	# <p> add symmetric triangles (in terms of node names)
 	# <!> nodes w/o symmetry
 	# <A> uniqueness
-	areasSymmNs = nodeSymmDict[areasNs];
+	trianglesSymmNs = nodeSymmDict[trianglesNs];
 	# <p> convert back to indeces
-	areasUnique = matrix(which.indeces(as.character(areasNs), rownames(graph)), ncol = 3);
-	areasSymm = matrix(which.indeces(as.character(areasSymmNs), rownames(graph)), ncol = 3);
-	areasAll = rbind(areasUnique, areasSymm);
-	r = list(areas = areasAll, symm = cbind(1:nrow(areasUnique), nrow(areasUnique) + (1:nrow(areasUnique))));
+	trianglesUnique = matrix(which.indeces(as.character(trianglesNs), rownames(graph)), ncol = 3);
+	trianglesSymm = matrix(which.indeces(as.character(trianglesSymmNs), rownames(graph)), ncol = 3);
+	trianglesAll = rbind(trianglesUnique, trianglesSymm);
+	r = list(
+		triangles = trianglesAll,
+		symm = cbind(1:nrow(trianglesUnique), nrow(trianglesUnique) + (1:nrow(trianglesUnique)))
+	);
 	r
 }
-graphSymmetryAreas = function(graph, direction = 1)delaunaySymm(graph, direction = 1)$symm;
+graphSymmetryTriangles = function(graph, direction = 1)delaunaySymm(graph, direction = 1)$symm;
 
 #
 #	<p> exposed interface functions
 #
 
 graphSymmetries = function(graph, direction = 1) {
-	coords = 1:nrow(graph);
-	
-	tri = delaunayn(graphs);
+	# <p> nodes
+	nodes = as.matrix(1:nrow(graph));
+	nodeSymm = graphSymmetry(graph, nodes, selfSymmetry = TRUE);
+	# <p> distances
+	distances = do.call(rbind, lapply(as.list(set_combn(nodes, 2L)), unlist));
+	distSymm = graphSymmetry(graph, distances);
+	# <p> triangles
+	triangles = delaunaySymm(graph, direction = direction)$symm;
+	r = list(node = nodeSymm, distance = distSymm, triangle = triangles);
+	r
 }
 
