@@ -32,7 +32,7 @@ graphmid = function(graph, direction = 1)mean(graph[, direction])
 #		(direction == 1: x-flip, direction == 2, y-flip, ...)
 
 graphSymmetry = function(graph, elements, direction = 1, eps = 1e-5, selfSymmetry = FALSE) {
-	midline = graphmid(graph);
+	midline = graphmid(graph, direction);
 	Els = 1:nrow(elements);
 	epairs = do.call(rbind, lapply(as.list(set_combn(Els, 2L)), unlist));
 	# self-symmetry
@@ -51,7 +51,9 @@ graphSymmetry = function(graph, elements, direction = 1, eps = 1e-5, selfSymmetr
 	});
 	spairs = epairs[s, ];
 	dimnames(spairs)[[2]] = paste('symm', 1:2, sep = '');
-	spairs
+	if (!selfSymmetry) return(list(pairs = spairs, direction = direction));
+	r = list(pairs = spairs, direction = direction, selfSymmetryRef = midline);
+	r
 }
 
 #
@@ -77,7 +79,7 @@ matrix2dictSymm = function(m) {
 
 # graph assumed to be symmterized
 delaunaySymm = function(graph, direction = 1) {
-	nodeSymm = graphSymmetry(graph, as.matrix(1:nrow(graph)), selfSymmetry = TRUE);
+	nodeSymm = graphSymmetry(graph, as.matrix(1:nrow(graph)), selfSymmetry = TRUE)$pairs;
 	nodeSymmNs = matrix(rownames(graph)[nodeSymm], ncol = 2);	# by name
 	nodeSymmDict = matrix2dictSymm(nodeSymmNs);
 	# <p> using graphSymmetry has no canonical preference with respect to position (e.g. left/right)
