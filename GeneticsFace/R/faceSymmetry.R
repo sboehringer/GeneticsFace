@@ -103,7 +103,17 @@ delaunaySymm = function(graph, direction = 1) {
 	);
 	r
 }
-graphSymmetryTriangles = function(graph, direction = 1)delaunaySymm(graph, direction = 1)$symm;
+graphSymmetryTriangles = function(graph, direction = 1)list(pairs = delaunaySymm(graph, direction = 1)$symm)
+
+#
+#	<p> abstract function
+#
+
+# if a certain structure (e.g. triangles) produces several features a corresponding symmetry can be computed
+#	automatically <i>
+graphSymmetryExpand = function(symm, N = 3) {
+	stop('');
+}
 
 #
 #	<p> exposed interface functions
@@ -117,7 +127,7 @@ graphSymmetries = function(graph, direction = 1) {
 	distances = do.call(rbind, lapply(as.list(set_combn(nodes, 2L)), unlist));
 	distSymm = graphSymmetry(graph, distances);
 	# <p> triangles
-	triangles = delaunaySymm(graph, direction = direction)$symm;
+	triangles = graphSymmetryTriangles(graph, direction = direction);
 	r = list(node = nodeSymm, distance = distSymm, triangle = triangles);
 	r
 }

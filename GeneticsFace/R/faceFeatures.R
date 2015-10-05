@@ -14,12 +14,12 @@ featureStructureDistance = function(graph, direction) {
 }
 
 featureStructureArea = function(graph, direction) {
-	triangles = delaunaySymm(graph, direction = direction)$symm;
+	triangles = delaunaySymm(graph, direction = direction)$triangles;
 	triangles
 }
 
 featureStructureAngle = function(graph, direction) {
-	triangles = delaunaySymm(graph, direction = direction)$symm;
+	triangles = delaunaySymm(graph, direction = direction)$triangles;
 	triangles
 }
 
@@ -52,25 +52,86 @@ extractCoordinate = function(graph, structure, symmetries = NULL) {
 	r
 }
 
-extractDistance = function(graph, structure, symmetries = NULL) {
-	ds = apply(structure, 1, function(pair) {
-		vnormv(graph[pair[1], ] - graph[pair[2], ])
-	});
-	if (is.null(symmetries)) return(list(feature = ds));
-	symm = symmetries$distance;
+symmetrizeFeature = function(feature, structure, symm) {
 	# <p> symmetrical features
-	dsS = apply(symm$pairs, 1, function(pair) {
-		mn = mean(ds[pair]);
-		asymm = ds[pair[1]] - (if (pair[1] == pair[2]) symm$selfSymmetryRef else mn);
+	featureS = apply(symm$pairs, 1, function(pair) {
+		mn = mean(feature[pair]);
+		asymm = feature[pair[1]] - (if (pair[1] == pair[2]) symm$selfSymmetryRef else mn);
 		c(mn, asymm)
 	});
 	# <p> non-symmetrical features
 	nonpaired = setdiff(1:nrow(structure), unique(as.vector(symm$pairs)));
 	# <p> result
-	r = list(feature = c(dsS[1, ], ds[nonpaired]), asymm = dsS[2, ]);
+	r = list(feature = c(featureS[1, ], feature[nonpaired]), asymm = featureS[2, ]);
 	r
 }
 
+extractDistance = function(graph, structure, symmetries = NULL) {
+	ds = apply(structure, 1, function(pair) {
+		vnormv(graph[pair[1], ] - graph[pair[2], ])
+	});
+	if (is.null(symmetries)) return(list(feature = ds));
+# 	symm = symmetries$distance;
+# 	# <p> symmetrical features
+# 	dsS = apply(symm$pairs, 1, function(pair) {
+# 		mn = mean(ds[pair]);
+# 		asymm = ds[pair[1]] - (if (pair[1] == pair[2]) symm$selfSymmetryRef else mn);
+# 		c(mn, asymm)
+# 	});
+# 	# <p> non-symmetrical features
+# 	nonpaired = setdiff(1:nrow(structure), unique(as.vector(symm$pairs)));
+# 	# <p> result
+# 	r = list(feature = c(dsS[1, ], ds[nonpaired]), asymm = dsS[2, ]);
+	r = symmetrizeFeature(ds, structure, symmetries$distance);
+	r
+}
+
+#
+#	<p> Triangle notation
+#
+#		  * C
+#		/   \
+#	   /	 \
+#	A *-------* B
+#	A := tri[1], B := tri[2], C := tri[3]
+#	a:= BC = d[1, ], b:= AC = d[2, ], c:= AB = d[3, ]
+#	al = alpha := ∠BAC, be = beta := ∠ABC, ga = gamma := alpha := ∠ACB
+#
+
+triangleDistances = function(graph, triangles) {
+	d = apply(triangles, 1, function(tri)c(
+		vnormv(graph[tri[3], ] - graph[tri[2], ]),	# a
+		vnormv(graph[tri[3], ] - graph[tri[1], ]),	# b
+		vnormv(graph[tri[2], ] - graph[tri[1], ])	# c
+	));
+	dimnames(d) = list(c('a', 'b', 'c'), NULL);
+	d
+}
+
+
+# structure: triangulation as computed by delaunaySymm
+extractArea = function(graph, structure, symmetries = NULL) {
+	d = triangleDistances(graph, structure);
+	s = apply(d, 2, sum)/2;
+	area = sqrt(s * (s - d['a', ]) * (s - d['b', ]) * (s - d['c', ]));
+	if (is.null(symmetries)) return(list(feature = area));
+	r = symmetrizeFeature(area, structure, symmetries$triangle);
+	r
+}
+
+extractAngle = function(graph, structure, symmetries = NULL) {
+browser();
+	d = triangleDistances(graph, structure);
+	dq = d^2;
+	al = acos((dq['b', ] + dq['c', ] - dq['a', ]) / (2 * d['b', ] * d['c', ]));
+	be = acos((dq['a', ] + dq['c', ] - dq['b', ]) / (2 * d['a', ] * d['c', ]));
+	ga = acos((dq['a', ] + dq['b', ] - dq['c', ]) / (2 * d['a', ] * d['b', ]));
+	angle = vector.intercalate(al, be, ga);
+
+	if (is.null(symmetries)) return(list(feature = angle));
+	r = symmetrizeFeature(angle, structure, symmetries$triangle);
+	r
+}
 
 extractFeatures = function(graph, features, structure, symmetries) {
 	fs = nlapply(features, function(feature) {
@@ -79,9 +140,7 @@ extractFeatures = function(graph, features, structure, symmetries) {
 	});
 }
 
-extractFeaturesArray = function(coords, features = 'distance', structure = NULL, symmetries = NULL) {
-	# <p> compute structure if not passed as argument
-	if (is.null(structure)) structure = featureStructure(coords, features = features);
+extractFeaturesArray = function(coords, features = 'distance', structure, symmetries = NULL) {
 	# <p> subset structure to needed extraction
 	structure = structure[features];
 	# <p> extract features
