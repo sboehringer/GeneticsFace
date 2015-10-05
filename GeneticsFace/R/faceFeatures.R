@@ -71,17 +71,6 @@ extractDistance = function(graph, structure, symmetries = NULL) {
 		vnormv(graph[pair[1], ] - graph[pair[2], ])
 	});
 	if (is.null(symmetries)) return(list(feature = ds));
-# 	symm = symmetries$distance;
-# 	# <p> symmetrical features
-# 	dsS = apply(symm$pairs, 1, function(pair) {
-# 		mn = mean(ds[pair]);
-# 		asymm = ds[pair[1]] - (if (pair[1] == pair[2]) symm$selfSymmetryRef else mn);
-# 		c(mn, asymm)
-# 	});
-# 	# <p> non-symmetrical features
-# 	nonpaired = setdiff(1:nrow(structure), unique(as.vector(symm$pairs)));
-# 	# <p> result
-# 	r = list(feature = c(dsS[1, ], ds[nonpaired]), asymm = dsS[2, ]);
 	r = symmetrizeFeature(ds, structure, symmetries$distance);
 	r
 }
@@ -120,7 +109,6 @@ extractArea = function(graph, structure, symmetries = NULL) {
 }
 
 extractAngle = function(graph, structure, symmetries = NULL) {
-browser();
 	d = triangleDistances(graph, structure);
 	dq = d^2;
 	al = acos((dq['b', ] + dq['c', ] - dq['a', ]) / (2 * d['b', ] * d['c', ]));
@@ -129,7 +117,7 @@ browser();
 	angle = vector.intercalate(al, be, ga);
 
 	if (is.null(symmetries)) return(list(feature = angle));
-	r = symmetrizeFeature(angle, structure, symmetries$triangle);
+	r = symmetrizeFeature(angle, structure, graphSymmetryExpand(symmetries$triangle, N = 3));
 	r
 }
 
@@ -155,6 +143,10 @@ extractFeaturesArray = function(coords, features = 'distance', structure, symmet
 	ftsA = lapply(features, function(feature)do.call(rbind, list.kp(r, Sprintf('%{feature}s$asymm'))));
 	ftsAM = do.call(cbind, ftsA);
 
-	r = list(feature = ftsM, asymm = ftsAM);
+	r = list(feature = ftsM,
+		asymm = ftsAM,
+		indecesFeature = listKeyValue(features, sapply(fts, ncol)),
+		indecesAsymm = listKeyValue(features, sapply(ftsA, ncol))
+	);
 	r
 }

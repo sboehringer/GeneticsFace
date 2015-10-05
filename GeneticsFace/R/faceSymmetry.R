@@ -112,7 +112,9 @@ graphSymmetryTriangles = function(graph, direction = 1)list(pairs = delaunaySymm
 # if a certain structure (e.g. triangles) produces several features a corresponding symmetry can be computed
 #	automatically <i>
 graphSymmetryExpand = function(symm, N = 3) {
-	stop('');
+	p = symm$pair;
+	pairsNew = matrix.intercalate((p - 1) * N + 1, (p - 1) * N + 2, (p - 1) * N + 3);
+	c(list(pairs = pairsNew), List_(symm, min_ = 'pairs'))
 }
 
 #
