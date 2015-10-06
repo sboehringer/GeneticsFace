@@ -32,7 +32,7 @@ visualizeClassfifier = function(meanGraph, model, modelDesc) {
 		#		feature == 'angle': matrix with three columns, each row inicates the triple of nodes 
 		#			corresponding to the triangle for which *three* coefficients corresond to the angles
 		#			in this triangle, the exact layout is described in an ASCII-art in faceFeature.R
-		cfs = extractFeatureCoefficients(rClass$model, feature, type = 'feature', dataFeature$desc);
+		cfs = extractFeatureCoefficients(model, feature, type = 'feature', modelDesc);
 
 		# do something to visualize here
 	});
