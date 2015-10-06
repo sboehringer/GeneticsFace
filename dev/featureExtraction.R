@@ -32,6 +32,9 @@ visualizeClassfifier = function(meanGraph, model, modelDesc) {
 		#		feature == 'angle': matrix with three columns, each row inicates the triple of nodes 
 		#			corresponding to the triangle for which *three* coefficients corresond to the angles
 		#			in this triangle, the exact layout is described in an ASCII-art in faceFeature.R
+		# type == 'feature' means that actual values of the features are extracted
+		# type == 'asymm' means that corresponding assymmetry values are extracted
+		# for the moment, type == 'feature' can be assumed
 		cfs = extractFeatureCoefficients(model, feature, type = 'feature', modelDesc);
 
 		# do something to visualize here
