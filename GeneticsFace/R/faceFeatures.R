@@ -8,6 +8,7 @@ featureStructureCoordinate = function(graph, direction) {
 }
 
 featureStructureDistance = function(graph, direction) {
+	nodes = as.matrix(1:nrow(graph));
 	# <p> distances
 	distances = do.call(rbind, lapply(as.list(set_combn(nodes, 2L)), unlist));
 	distances
@@ -128,6 +129,10 @@ extractFeatures = function(graph, features, structure, symmetries) {
 	});
 }
 
+featuresDesc = function(types, structure, symmetries) {
+	list(features = types, structure = structure, symmetries = symmetries);
+}
+
 extractFeaturesArray = function(coords, features = 'distance', structure, symmetries = NULL) {
 	# <p> subset structure to needed extraction
 	structure = structure[features];
@@ -145,8 +150,55 @@ extractFeaturesArray = function(coords, features = 'distance', structure, symmet
 
 	r = list(feature = ftsM,
 		asymm = ftsAM,
-		indecesFeature = listKeyValue(features, sapply(fts, ncol)),
-		indecesAsymm = listKeyValue(features, sapply(ftsA, ncol))
+		desc = c(featuresDesc(features, structure, symmetries), list(
+			indeces = list(
+				feature = vectorNamed(sapply(fts, ncol), features),
+				asymm = vectorNamed(sapply(ftsA, ncol), features)
+			)
+		))
 	);
 	r
 }
+
+#
+#	<p> create data including meta-data
+#
+
+# create full matrix and descriptor based on components
+dataComponents = function(fts, components) {
+	data = do.call(cbind, fts[components]);
+	desc = fts$desc;
+	desc$indeces = desc$indeces[components];
+	r = list(data = data, desc = desc);
+	r
+}
+
+structureForType = function(structure, symmetries, type = 'feature') {
+	struct = if (!is.null(symmetries)) {
+		symmF = symmetries$pairs[, 1];
+		# asymmetry features do not include unpaired features
+		nonpaired = if (type == 'asymm') c() else
+			setdiff(1:nrow(structure), unique(as.vector(symmetries$pairs)));
+		structure[c(symmF, nonpaired), , drop = FALSE];
+	} else structure;
+	struct
+}
+
+symmetryMap = list(coordinate = 'node', distance = 'distance', area = 'triangle', angle = 'triangle');
+extractStructureFromDesc = function(feature = 'distance', type = 'feature', desc) {
+	structureForType(desc$structure[[feature]], desc$symmetries[[symmetryMap[[feature]]]], type);
+}
+
+# type can be feature, asymm, for combined data set assume asymm after feature
+extractFeatureCoefficients = function(model, feature = 'distance', type = 'feature', desc) {
+	cs = cumsumR(desc$indeces);
+	csFeature = cumsumI(desc$indeces[[type]], offset = 0);
+	csI = which(names(csFeature) == feature);
+	# <N> assume intercept included into model
+	cfs = model[1 + cs[[type]] + (csFeature[csI]:(csFeature[csI+1] - 1)) ,];
+	struct = extractStructureFromDesc(feature, type, desc);
+	r = list(coefficients = cfs, structure = struct);
+	r
+}
+
+
