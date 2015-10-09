@@ -134,3 +134,13 @@ graphSymmetries = function(graph, direction = 1) {
 	r
 }
 
+#
+#	<p> general helper functions
+#
+
+symmetrizedAverageGraph = function(coords, flip = FALSE, extend = NULL, ...) {
+	grMn = meanGraph(coords);
+	grS = symmetrizeGraph(grMn, ...)$graphs;
+	if (flip) grS[, 2] = extend - grS[, 2];
+	grS
+}

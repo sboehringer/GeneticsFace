@@ -100,19 +100,47 @@ coloredPlots=function(feature, meanGraph, modelDesc, colorCoefficients, pars){
 }
 
 
-collapseColorAverg=function(feature,Average,pars){
-  MIXcol=1-pars$MIXave
-  Color=resize(readImage(paste(feature,'png',sep = ".")), dim(Average)[1], dim(Average)[2])
-  Color2=resize(pars$MIXave*(Average)^pars$POWERave+MIXcol*(Color[,,1:3])^pars$POWERcol,dim(Average)[1], dim(Average)[2])
-  writeImage(Color2, paste(feature, "comb.png",sep=".") , quality=100)
+collapseColorAverg=function(feature, input, average, pars) {
+	MIXcol=1-pars$MIXave;
+	Color = resize(readImage(input), dim(average)[1], dim(average)[2]);
+	Color2 = resize(pars$MIXave*(average)^pars$POWERave+MIXcol*(Color[,,1:3])^pars$POWERcol,
+		dim(average)[1], dim(average)[2]);
+	display(Color2)
 }
 
-visualizeClassfifier = function(meanGraph, model, modelDesc, pars) {
-  colorCoefficients=gridColor(meanGraph, model, modelDesc, pars)
-  lapply(c(modelDesc$features, 'all'), function(feature) { 
-    png(paste(feature,'png',sep = ".")) 
-    coloredPlots(feature, meanGraph, modelDesc, colorCoefficients,pars) 
-    dev.off()
-    collapseColorAverg(feature,Average,pars)
-  })
+parsDefault = list(
+	Npoints=200,	# number of points used to construct the (Npoints x Npoints) grid 
+	n.col=100,		# number of different hues (see example below) for function hsv()
+	s=1, v=1,		# numeric values in the range [0, 1] for ???saturation??? and ???value??? 
+					# to be combined to form a vector of colors for function hsv()
+	alpha=.5,		# numeric vector of values in the range [0, 1] for alpha transparency 
+					# channel (0 means transparent and 1 means opaque). Needed for choosing 
+					# transparency of the colored graph in order to see the average black 
+					# and white image in the background
+	STAND=TRUE,		# should the color coefficients be standardized. need for plots to be comparable
+	NORM=TRUE,		# should the color coefficients be normalized need for plots to be comparable
+	SCALAR = 1,		# numeric value in the range of [0, Inf] used for normalization of color coefficient 
+					# exp(color*SCALAR)/(1/exp(color*SCALAR))
+	MIRRORED=TRUE,	# should the colors from half of the face be mirrored to the other half? 
+	TRIANGULATION=F,# should the plot of the average individual appear on top of the colored image? 
+					# Useful to see if plots are aligned properly
+	MIXave=.5,		# numeric values in the range [0, 1] for mixing parameter for the colored 
+					# and background photo. 
+	POWERave=2,		# numeric value in the range [0, Inf] for intensity of colors for the background photo.
+	POWERcol=2		# numeric value in the range [0, Inf] for intensity of colors for the colored photo.
+);
+
+importancePlot = function(meanGraph, model, modelDesc, pars = list(), output, average = NULL) {
+	pars = merge.lists(parsDefault, pars);
+	colorCoefficients=gridColor(meanGraph, model, modelDesc, pars)
+	r = lapply(c(modelDesc$features, 'all'), function(feature) {
+		pathImportance = Sprintf('%{output}s-%{feature}s.png');
+		plot_save(
+			coloredPlots(feature, meanGraph, modelDesc, colorCoefficients, pars)
+		, plot_path = pathImportance);
+		if (!is.null(average)) plot_save(
+			collapseColorAverg(feature, pathImportance, average, pars)
+		, plot_path = Sprintf('%{output}s-%{feature}s-background.png'))
+	});
+	r
 }
