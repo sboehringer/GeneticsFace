@@ -105,7 +105,7 @@ collapseColorAverg=function(feature, input, average, pars) {
 	Color = resize(readImage(input), dim(average)[1], dim(average)[2]);
 	Color2 = resize(pars$MIXave*(average)^pars$POWERave+MIXcol*(Color[,,1:3])^pars$POWERcol,
 		dim(average)[1], dim(average)[2]);
-	display(Color2)
+	display(Color2, method = 'raster')
 }
 
 parsDefault = list(
