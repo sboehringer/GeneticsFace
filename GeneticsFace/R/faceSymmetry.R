@@ -97,6 +97,7 @@ delaunaySymm = function(graph, direction = 1) {
 	trianglesUnique = matrix(which.indeces(as.character(trianglesNs), rownames(graph)), ncol = 3);
 	trianglesSymm = matrix(which.indeces(as.character(trianglesSymmNs), rownames(graph)), ncol = 3);
 	trianglesAll = rbind(trianglesUnique, trianglesSymm);
+	dimnames(trianglesAll) = list(NULL, c('a', 'b', 'c'));
 	r = list(
 		triangles = trianglesAll,
 		symm = cbind(1:nrow(trianglesUnique), nrow(trianglesUnique) + (1:nrow(trianglesUnique)))

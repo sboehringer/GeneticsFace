@@ -87,6 +87,15 @@ extractDistance = function(graph, structure, symmetries = NULL) {
 #	a:= BC = d[1, ], b:= AC = d[2, ], c:= AB = d[3, ]
 #	al = alpha := ∠BAC, be = beta := ∠ABC, ga = gamma := alpha := ∠ACB
 #
+#	External Angles are relative to the first coordinate axes after choosing point Z as origin
+#		   * C
+#		  /  \
+#		 /    \
+#		/	 --* B
+#	   /  --/	
+#	A *--/------------------> X
+#	ext(A) = alpha external := ∠XAB, ext(B) := ∠XBC, ext(C) := alpha := ∠XCA
+#
 
 triangleDistances = function(graph, triangles) {
 	d = apply(triangles, 1, function(tri)c(
@@ -98,6 +107,11 @@ triangleDistances = function(graph, triangles) {
 	d
 }
 
+triangleOrientation = function(graph, triangles) {
+	apply(triangles, 1, function(tri)sign(
+		vectorCross(graph[tri[['b']], ] - graph[tri[['a']], ], graph[tri[['c']], ] - graph[tri[['a']], ])
+	[3]))
+}
 
 # structure: triangulation as computed by delaunaySymm
 extractArea = function(graph, structure, symmetries = NULL) {
@@ -106,6 +120,38 @@ extractArea = function(graph, structure, symmetries = NULL) {
 	area = sqrt(s * (s - d['a', ]) * (s - d['b', ]) * (s - d['c', ]));
 	if (is.null(symmetries)) return(list(feature = area));
 	r = symmetrizeFeature(area, structure, symmetries$triangle);
+	r
+}
+
+extractAngleExternalX = function(graph, structure, symmetries = NULL) {
+	d = triangleDistances(graph, structure);
+	sta = structure[, 'a'];
+	stb = structure[, 'b'];
+	stc = structure[, 'c'];
+	g1 = graph[, 1];
+	g2 = graph[, 2];
+	extAr = acos((g1[stb] - g1[sta]) / d['c', ]);
+	extA = ifelse((g2[stb] - g2[sta]) < 0, 2*pi - extAr, extAr);
+	extBr = acos((g1[stc] - g1[stb]) / d['a', ]);
+	extB = ifelse((g2[stc] - g2[stb]) < 0, 2*pi - extBr, extBr);
+	extCr = acos((g1[sta] - g1[stc]) / d['b', ]);
+	extC = ifelse((g2[sta] - g2[stc]) < 0, 2*pi - extCr, extCr);
+	angle = vector.intercalate(extA, extB, extC);
+
+	if (is.null(symmetries)) return(list(feature = angle));
+	r = symmetrizeFeature(angle, structure, graphSymmetryExpand(symmetries$triangle, N = 3));
+	r
+}
+
+extractAngleMinDist = function(graph, structure, symmetries = NULL) {
+	d = triangleDistances(graph, structure);
+	distA = apply(cbind(d['b', ], d['c', ]), 1, min);
+	distB = apply(cbind(d['a', ], d['c', ]), 1, min);
+	distC = apply(cbind(d['a', ], d['b', ]), 1, min);
+	distMin = vector.intercalate(distA, distB, distC);
+
+	if (is.null(symmetries)) return(list(feature = distMin));
+	r = symmetrizeFeature(distMin, structure, graphSymmetryExpand(symmetries$triangle, N = 3));
 	r
 }
 
