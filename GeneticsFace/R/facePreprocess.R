@@ -2,6 +2,13 @@
 #	facePreprocess.R
 #Mon Aug 31 12:18:52 CEST 2015
 
+applyPathes = function(pathes, f, ..., noMerge = FALSE) {
+	r = lapply(pathes, function(p)f(p$path, ...))
+	if (noMerge) return(r);
+	r1 = merge.lists(r, listOfLists = T, concat = T, useIndeces = T);
+	r1
+}
+
 convertImage = function(input, output, quality = 80L) {
 	cmd = Sprintf("convert -quality %{quality}s %{input}Q %{output}Q");
 	System(cmd, 3);
@@ -60,13 +67,33 @@ dataAlignNodes = function(data) {
 #' @arg path Path to folder from which files with extension `pos` are parsed
 #' @arg path2metaRegex Provide regular expression that is applied to the path and caputres of which
 #'   are used as meta-information returned in the type column of the result data frame
-readCoordinateData = function(path, path2metaRegex = NULL, reader = readCoordinateFile_visigen) {
+readCoordinateData = function(path, path2metaRegex = NULL, reader = readCoordinateFile_visigen,
+	imageExts = c('jpg', 'jpeg', 'JPG', 'JPEG'), type = NULL) {
 	files = list_files_with_exts(path, 'pos');
+	if (!all(
+		sort(sapply(list_files_with_exts(path, imageExts), function(f)splitPath(f)$base)) ==
+		sort(sapply(files, function(f)splitPath(f)$base)))) {
+		stop(Sprintf('Mismatch coordinate, image files in: %{path}s'));
+	}
 	r0 = lapply(files, readCoordinatesFromFile, reader = reader, path2metaRegex = path2metaRegex);
 	r1 = dataAlignNodes(do.call(rbind, r0));
 	# <p> return
-	d = data.frame.types(r1$coords, factor = c('id', 'type', 'node'));
+	d = Df_(r1$coords, as_factor = c('id', 'type', 'node'));
+	if (!is.null(type)) d$type = type;
 	r = list(coord = d, nodes = r1$nodes);
+	r
+}
+readCoordinateDataFromPathes = function(pathList, imageExts = c('jpg', 'jpeg', 'JPG', 'JPEG')) {
+	d = lapply(pathList, function(p)readCoordinateData(p$path, type = p$type, imageExts = imageExts));
+	nodes = do.call(cbind, lapply(list.kp(d, 'nodes'), sort));
+	if (!all(apply(nodes, 1, same.vector))) {
+		print(nodes);
+		stop('Sets of data with incompatible nodes');
+	}
+	r1 = dataAlignNodes(do.call(rbind, list.kp(d, 'coord')));
+	# <p> return
+	d1 = Df_(r1$coords, as_factor = c('id', 'type', 'node'));
+	r = list(coord = d1, nodes = r1$nodes);
 	r
 }
 
@@ -295,16 +322,17 @@ procrustesTransformImages = function(path, output,
 	outputDirAnnotation = con(output, '/01_annotated'),
 	outputDirTransform = con(output, '/02_transformed'),
 	outputDirAnnotationTransf = con(output, '/03_transformed_annotated'),
-	readCoordinates = readCoordinateData,
+	readCoordinates = readCoordinateDataFromPathes,
 	annotate = T, dimTarget = rep(512, 2), margin = .05, ...) {
 
-	convertImages(path, outputDirRaw);
+	if (!is.list(path)) path = list(path = path);
 	d = readCoordinates(path, ...);
+	applyPathes(path, convertImages, output = outputDirRaw, noMerge = T);
 	a = table2array(d$coord);
 	pa = performProcrustes(a);
 	scale = scaleFromBoundingBox(boundingBox(pa$rotated), dimTarget, margin);
 
-	ip = listImages(path);
+	ip = unlist(applyPathes(path, listImages, noMerge = T));
 	coords = ilapply(ip, function(path, i) {
 		file = splitPath(path)$file;
 		pdim = pictureDimensions(path);
@@ -325,13 +353,21 @@ procrustesTransformImages = function(path, output,
 	coords = array(unlist(coords), dim = c(dim(coords[[1]]), length(coords)));
 	dimnames(coords) = dimnames(a);
 	ids = sapply(ip, function(e)splitPath(e)$base);
-	r = list(id = ids,
-		coords = coords,
+	r = list(id = ids, group = d$coord$type, coords = coords,
 		# paths
 		images = ip, input = path, output = output,
 		outputDirRaw = outputDirRaw, outputDirAnnotation = outputDirAnnotation,
 		outputDirTransform = outputDirTransform, outputDirAnnotationTransf = outputDirAnnotationTransf
 	);
+	r
+}
+
+collectionRemoveIds = function(collection, ids) {
+	i = which.indeces(ids, collection$id);
+	r = merge.lists(collection, list(
+		id = collection$id[-i], group = collection$group[-i], coords = collection$coords[,, -i],
+		images = collection$images[-i]
+	));
 	r
 }
 
@@ -356,6 +392,8 @@ averageGroups = function(collection, groups,
 	r = c(collection, list(outputAverages = output));
 	r
 }
+
+
 
 #
 #	<p> graph pre-processing
