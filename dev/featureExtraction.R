@@ -8,6 +8,7 @@ library('EBImage');
 library('geometry');
 library('sets');
 source('../GeneticsFace/R/Rdata.R');
+source('../GeneticsFace/R/Rgraphics.R');
 source('../GeneticsFace/R/facePreprocess.R');
 source('../GeneticsFace/R/faceData.R');
 source('../GeneticsFace/R/facePlotting.R');

@@ -325,7 +325,7 @@ procrustesTransformImages = function(path, output,
 	readCoordinates = readCoordinateDataFromPathes,
 	annotate = T, dimTarget = rep(512, 2), margin = .05, ...) {
 
-	if (!is.list(path)) path = list(path = path);
+	if (!is.list(path)) path = list(list(path = path));
 	d = readCoordinates(path, ...);
 	applyPathes(path, convertImages, output = outputDirRaw, noMerge = T);
 	a = table2array(d$coord);
