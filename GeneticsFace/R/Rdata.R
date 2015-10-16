@@ -123,6 +123,8 @@ listFind = function(lsed, lsee) {
 	r
 }
 
+same.vector = function(v)all(v == v[1])
+
 #
 #	<§> string manipulation
 #
@@ -787,14 +789,17 @@ exists.pos = function(v, i)(is.vector(v) && !is.na(v[i]))
 #	<par> lists
 #
 
-merge.lists = function(..., ignore.nulls = TRUE, listOfLists = F) {
+merge.lists = function(..., ignore.nulls = TRUE, listOfLists = FALSE, concat = FALSE, useIndeces = FALSE) {
 	lists = if (listOfLists) c(...) else list(...);
 	l1 = lists[[1]];
 	if (length(lists) > 1) for (i in 2:length(lists)) {
 		l2 = lists[[i]];
-		for(n in names(l2)) {
+		ns = if (useIndeces) 1L:length(l2) else names(l2);
+		for(n in ns) {
 			if (is.null(n)) print("Warning: tried to merge NULL key");
-			if (!is.null(n) & (!ignore.nulls | !is.null(l2[[n]]))) l1[[n]] = l2[[n]];
+			if (!is.null(n) & (!ignore.nulls | !is.null(l2[[n]]))) {
+				if (concat) l1[[n]] = c(l1[[n]], l2[[n]]) else l1[[n]] = l2[[n]];
+			}
 		}
 	}
 	l1
@@ -1806,6 +1811,18 @@ data.frame.union = function(l) {
 		dfu = rbind(dfu, cbind(df, factor));
 	}
 	dfu
+}
+
+recodeLevels = function(f, map, others2na = TRUE) {
+	# map others to NA
+	if (others2na) {
+		nonmentioned = setdiff(if (is.factor(f)) levels(f) else unique(f), names(map));
+		map = c(map, listKeyValue(nonmentioned, rep(NA, length(nonmentioned))));
+	}
+	v = vector.replace(as.character(f), map);
+	if (is.integer(f)) v = as.integer(v);
+	if (is.factor(f)) v = as.factor(v);
+	v
 }
 
 Union = function(..., .drop = T) {
