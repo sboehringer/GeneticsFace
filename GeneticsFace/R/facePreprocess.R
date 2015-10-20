@@ -19,14 +19,16 @@ convertImages = function(path, output, extension = 'jpg', quality = 80L) {
 	Dir.create(output, recursive = TRUE);
 	r = lapply(files, function(path){
 		file = splitPath(path)$file;
-		convertImage(path, Sprintf("%{output}s/%{file}s"), quality);
+		outputPath = Sprintf("%{output}s/%{file}s");
+		convertImage(path, outputPath, quality);
+		outputPath
 	});
 	r
 }
 
 defaultExts = c('jpg', 'jpeg', 'JPG', 'JPEG');
 listImages = function(path, extension = defaultExts)list_files_with_exts(path, extension);
-readImages = function(path, extension = defaultExts, ...)lapply(listImages(path, extension), function(file)readImage(file));
+readImages = function(path, extension = defaultExts, ...)lapply(listImages(path, extension), function(file) readImage(file));
 images2grey = function(is)lapply(is, function(i)channel(i, 'gray'))
 
 readCoordinatesFromFile = function(path, path2metaRegex = NULL, reader = readCoordinateFile_visigen) {
@@ -269,7 +271,7 @@ pictureMap2output = function(aff, outputDim, scale = 1) {
 }
 
 #' @arg recenter: assume aff is centered around the origin, recenter to middle coordinate of the picture
-pictureTransform = function(path, aff, outputDir, outputDim = pictureDimensions(path),
+pictureTransformImageMagick = function(path, aff, outputDir, outputDim = pictureDimensions(path),
 	extraArgs = '-type Grayscale', recenter = T, scale = 1, quality = .9) {
 	Dir.create(outputDir, recursive = TRUE);
 	file = splitPath(path)$file;
@@ -283,7 +285,17 @@ pictureTransform = function(path, aff, outputDir, outputDim = pictureDimensions(
 	System(cmd, 2);
 }
 
-pictureAnnotate = function(path, graph, outputDir, scale = 1, borders = rep(0, 4)) {
+pictureTransform = function(image, aff, output = NULL, outputDim = 512, quality = 1, background = gray(.6)) {
+	image = channel(image, 'gray');
+	imageTrans = affine(image, aff, output.dim = outputDim, bg.col = background);
+	if (!is.null(output)) {
+		Dir.create(splitPath(output)$dir, recursive = TRUE);
+		writeImage(imageTrans, output, quality = quality * 1e2);
+	}
+	imageTrans
+}
+
+pictureAnnotateImageMagick = function(path, graph, outputDir, scale = 1, borders = rep(0, 4)) {
 	Dir.create(outputDir);
 	file = splitPath(path)$file;
 	graphS = paste(
@@ -294,6 +306,25 @@ pictureAnnotate = function(path, graph, outputDir, scale = 1, borders = rep(0, 4
 	, collapse = ' circle ');
 	cmd = Sprintf('convert %{path}Q -draw %{graphS}Q %{outputDir}Q/%{file}Q');
 	System(cmd, 2);
+}
+
+pictureAnnotate = function(image, graph, output,
+	colorNode = rgb(1, 0, 0), quality = 1, gridUnit = 'points', flipY = TRUE, nodeSize = 4) {
+	dimI = dim(image)[1:2];
+	if (flipY) graph[, 2] = dimI[2] - graph[, 2];
+	grid.newpage();
+	imgGrob = ebimageGrob(image, x = unit(dimI[1]/2, gridUnit), y = unit(dimI[2]/2, gridUnit));
+	#imgGrob = ebimageGrob(image);
+	nodes = pointsGrob(graph[, 1], graph[, 2],
+			size = unit(nodeSize, gridUnit), pch = 21, gp = gpar(fill = colorNode), default.units = gridUnit);
+	imageAnnotated = gList(imgGrob, nodes);
+	grid.draw(imageAnnotated);
+	if (!is.null(output)) {
+		Dir.create(splitPath(output)$dir, recursive = TRUE);
+		plot_save(grid.draw(imageAnnotated), plot_path = output, width = dimI[1], height = dimI[2],
+			unit = 'points', unit_out = 'points');
+	}
+	imageAnnotated
 }
 
 #
@@ -323,31 +354,36 @@ procrustesTransformImages = function(path, output,
 	outputDirTransform = con(output, '/02_transformed'),
 	outputDirAnnotationTransf = con(output, '/03_transformed_annotated'),
 	readCoordinates = readCoordinateDataFromPathes,
-	annotate = T, dimTarget = rep(512, 2), margin = .05, ...) {
+	annotate = T, dimTarget = rep(512, 2), margin = .05, ..., backGround) {
 
 	if (!is.list(path)) path = list(list(path = path));
 	d = readCoordinates(path, ...);
-	applyPathes(path, convertImages, output = outputDirRaw, noMerge = T);
+	pathesRaw = unlist(applyPathes(path, convertImages, output = outputDirRaw, noMerge = T));
 	a = table2array(d$coord);
 	pa = performProcrustes(a);
 	scale = scaleFromBoundingBox(boundingBox(pa$rotated), dimTarget, margin);
 
 	ip = unlist(applyPathes(path, listImages, noMerge = T));
+	imageRaw = lapply(pathesRaw, readImage);
 	coords = ilapply(ip, function(path, i) {
-		file = splitPath(path)$file;
+		sp = splitPath(path);
+		file = sp$file;
 		pdim = pictureDimensions(path);
-		if (annotate) pictureAnnotate(path, a[, , i], outputDirAnnotation);
+		outputAnnot = Sprintf('%{outputDirAnnotation}s/%{base}s.png', base = sp$base);
+		if (annotate) imageAnnot = pictureAnnotate(imageRaw[[i]], a[, , i], outputAnnot);
 
 		aff = affineBetween(a[, , i], pa$rotated[, , i]);
 		rot = affine2components(aff);
 		#rot$rot[1] = 20/360 * (2 * pi);
 		aff = components2affine(rot);
-		pictureTransform(path, aff, outputDirTransform, outputDim = dimTarget, scale = scale);
-
 		affImg = pictureMap2output(aff, dimTarget, scale);
+		outputTrans = Sprintf('%{outputDirTransform}s/%{base}s.png', base = sp$base);
+		imageTrans = pictureTransform(imageRaw[[i]],
+			affImg[, 1:2], output = outputTrans, outputDim = dimTarget);
+
 		paCoords = homI(hom(a[, , i]) %*% affImg);
-		if (annotate) pictureAnnotate(
-			Sprintf('%{outputDirTransform}s/%{file}s'), paCoords, outputDirAnnotationTransf);
+		outputTransAnnot = Sprintf('%{outputDirTransform}s/%{base}s.png', base = sp$base);
+		if (annotate) pictureAnnotate(imageTrans, paCoords, output = outputTransAnnot);
 		paCoords
 	});
 	coords = array(unlist(coords), dim = c(dim(coords[[1]]), length(coords)));

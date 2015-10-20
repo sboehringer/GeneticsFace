@@ -3,6 +3,7 @@
 #Tue Sep 15 17:41:24 2015
 
 library('ggplot2');
+library('grid');
 
 triangulation2segments = function(graph, tri, extend = 512, doFlipY = TRUE) {
 	g = graph;
