@@ -2,6 +2,8 @@
 #	facePreprocess.R
 #Mon Aug 31 12:18:52 CEST 2015
 
+defaultExts = c('jpg', 'jpeg', 'JPG', 'JPEG');
+
 applyPathes = function(pathes, f, ..., noMerge = FALSE) {
 	r = lapply(pathes, function(p)f(p$path, ...))
 	if (noMerge) return(r);
@@ -14,19 +16,18 @@ convertImage = function(input, output, quality = 80L) {
 	System(cmd, 3);
 }
 
-convertImages = function(path, output, extension = 'jpg', quality = 80L) {
+convertImages = function(path, output, extension = defaultExts, outputFormat = 'jpg', quality = 95L) {
 	files = list_files_with_exts(path, extension);
 	Dir.create(output, recursive = TRUE);
 	r = lapply(files, function(path){
-		file = splitPath(path)$file;
-		outputPath = Sprintf("%{output}s/%{file}s");
+		base = splitPath(path)$base;
+		outputPath = Sprintf("%{output}s/%{base}s.%{outputFormat}s");
 		convertImage(path, outputPath, quality);
 		outputPath
 	});
 	r
 }
 
-defaultExts = c('jpg', 'jpeg', 'JPG', 'JPEG');
 listImages = function(path, extension = defaultExts)list_files_with_exts(path, extension);
 readImages = function(path, extension = defaultExts, ...)lapply(listImages(path, extension), function(file) readImage(file));
 images2grey = function(is)lapply(is, function(i)channel(i, 'gray'))
@@ -308,21 +309,22 @@ pictureAnnotateImageMagick = function(path, graph, outputDir, scale = 1, borders
 	System(cmd, 2);
 }
 
+# <!> png makes white stripes
 pictureAnnotate = function(image, graph, output,
-	colorNode = rgb(1, 0, 0), quality = 1, gridUnit = 'points', flipY = TRUE, nodeSize = 4) {
+	colorNode = rgb(1, 0, 0), gridUnit = 'points', flipY = TRUE, nodeSize = 4, draw = FALSE,
+	quality = 95L) {
 	dimI = dim(image)[1:2];
 	if (flipY) graph[, 2] = dimI[2] - graph[, 2];
-	grid.newpage();
 	imgGrob = ebimageGrob(image, x = unit(dimI[1]/2, gridUnit), y = unit(dimI[2]/2, gridUnit));
 	#imgGrob = ebimageGrob(image);
 	nodes = pointsGrob(graph[, 1], graph[, 2],
 			size = unit(nodeSize, gridUnit), pch = 21, gp = gpar(fill = colorNode), default.units = gridUnit);
 	imageAnnotated = gList(imgGrob, nodes);
-	grid.draw(imageAnnotated);
+	if (draw) grid.draw(imageAnnotated);
 	if (!is.null(output)) {
 		Dir.create(splitPath(output)$dir, recursive = TRUE);
 		plot_save(grid.draw(imageAnnotated), plot_path = output, width = dimI[1], height = dimI[2],
-			unit = 'points', unit_out = 'points');
+			unit = 'points', unit_out = 'points', quality = quality);
 	}
 	imageAnnotated
 }
@@ -363,35 +365,31 @@ procrustesTransformImages = function(path, output,
 	pa = performProcrustes(a);
 	scale = scaleFromBoundingBox(boundingBox(pa$rotated), dimTarget, margin);
 
-	ip = unlist(applyPathes(path, listImages, noMerge = T));
-	imageRaw = lapply(pathesRaw, readImage);
-	coords = ilapply(ip, function(path, i) {
-		sp = splitPath(path);
-		file = sp$file;
-		pdim = pictureDimensions(path);
-		outputAnnot = Sprintf('%{outputDirAnnotation}s/%{base}s.png', base = sp$base);
-		if (annotate) imageAnnot = pictureAnnotate(imageRaw[[i]], a[, , i], outputAnnot);
+	coords = ilapply(pathesRaw, function(path, i) {
+		image = readImage(path);
+		base = splitPath(path)$base;
+		outputAnnot = Sprintf('%{outputDirAnnotation}s/%{base}s.jpg');
+		if (annotate) pictureAnnotate(image, a[, , i], outputAnnot);
 
 		aff = affineBetween(a[, , i], pa$rotated[, , i]);
 		rot = affine2components(aff);
 		#rot$rot[1] = 20/360 * (2 * pi);
 		aff = components2affine(rot);
 		affImg = pictureMap2output(aff, dimTarget, scale);
-		outputTrans = Sprintf('%{outputDirTransform}s/%{base}s.png', base = sp$base);
-		imageTrans = pictureTransform(imageRaw[[i]],
-			affImg[, 1:2], output = outputTrans, outputDim = dimTarget);
+		outputTrans = Sprintf('%{outputDirTransform}s/%{base}s.jpg');
+		imageTrans = pictureTransform(image, affImg[, 1:2], output = outputTrans, outputDim = dimTarget);
 
 		paCoords = homI(hom(a[, , i]) %*% affImg);
-		outputTransAnnot = Sprintf('%{outputDirTransform}s/%{base}s.png', base = sp$base);
+		outputTransAnnot = Sprintf('%{outputDirAnnotationTransf}s/%{base}s.jpg');
 		if (annotate) pictureAnnotate(imageTrans, paCoords, output = outputTransAnnot);
 		paCoords
 	});
 	coords = array(unlist(coords), dim = c(dim(coords[[1]]), length(coords)));
 	dimnames(coords) = dimnames(a);
-	ids = sapply(ip, function(e)splitPath(e)$base);
-	r = list(id = ids, group = d$coord$type, coords = coords,
+	ids = sapply(pathesRaw, function(e)splitPath(e)$base);
+	r = list(id = ids, group = unique(d$coord[, c('id', 'type')])$type, coords = coords,
 		# paths
-		images = ip, input = path, output = output,
+		images = pathesRaw, input = path, output = output,
 		outputDirRaw = outputDirRaw, outputDirAnnotation = outputDirAnnotation,
 		outputDirTransform = outputDirTransform, outputDirAnnotationTransf = outputDirAnnotationTransf
 	);
@@ -419,52 +417,12 @@ prepareAveraging = function(collection, dataArray,
 })}
 
 averageGroups = function(collection, groups,
-	output = con(collection$output, '/05_averages'), averager = averageGraphs_ini) {
+	output = con(collection$output, '/05_averages'), averager = averageGraphs_ini, ...) {
 	ls = levels(as.factor(groups));
 	sapply(ls, function(level) {
 		sel = collection$id[which(groups == level)];
-		averager(collection, level, sel, output);
+		averager(collection, level, sel, output, ...);
 	});
 	r = c(collection, list(outputAverages = output));
-	r
-}
-
-
-
-#
-#	<p> graph pre-processing
-#
-
-symmetrizeGraph = function(graph, nodeSymmetries = symmetry_visigenStd) {
-	# <p> indeces and global midline
-	nodes = dimnames(graph)[[1]];
-	# indeces of nodes on the midline
-	midline = which.indeces(
-		nodeSymmetries[which(apply(nodeSymmetries, 1, function(nds)nds[1] == nds[2])), 1], nodes
-	);
-	# pairs of indeces for symmetric landmarks as matrix
-	symm = matrix(which.indeces(
-		as.vector(nodeSymmetries[which(apply(nodeSymmetries, 1, function(nds)nds[1] != nds[2])), ]), nodes
-	), ncol = 2);
-	# mean of midline landmarks
-	graph_midline = mean(graph[midline, 1]);
-	graphs = graph;	# symmetrized graph
-
-	# <p> adjust midline to "midline-center"
-	graphs[midline, 1] = graph_midline;
-
-	# <p> adjust symmetric nodes
-	graphsn = apply(symm, 1, function(sn) {
-		symmprep = rbind(
-			c(graph_midline - graph[sn[1], 1], graph[sn[1], 2]),
-			c(graph[sn[2], 1] - graph_midline, graph[sn[2], 2])
-		);
-		means = apply(symmprep, 2, mean);
-		symmetrized = c(graph_midline - means[1], means[2], means[1] + graph_midline, means[2]);
-		symmetrized		
-	});
-	graphs[as.vector(t(symm)), ] = matrix(as.vector(graphsn), byrow = T, ncol = 2);
-
-	r = list(graphs = graphs, grapha = graph - graphs, midline_x = graph_midline);
 	r
 }

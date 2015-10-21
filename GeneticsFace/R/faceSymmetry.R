@@ -110,6 +110,44 @@ graphSymmetryTriangles = function(graph, direction = 1)list(pairs = delaunaySymm
 #	<p> abstract function
 #
 
+#
+#	<p> graph pre-processing
+#
+
+symmetrizeGraph = function(graph, nodeSymmetries = symmetry_visigenStd) {
+	# <p> indeces and global midline
+	nodes = dimnames(graph)[[1]];
+	# indeces of nodes on the midline
+	midline = which.indeces(
+		nodeSymmetries[which(apply(nodeSymmetries, 1, function(nds)nds[1] == nds[2])), 1], nodes
+	);
+	# pairs of indeces for symmetric landmarks as matrix
+	symm = matrix(which.indeces(
+		as.vector(nodeSymmetries[which(apply(nodeSymmetries, 1, function(nds)nds[1] != nds[2])), ]), nodes
+	), ncol = 2);
+	# mean of midline landmarks
+	graph_midline = mean(graph[midline, 1]);
+	graphs = graph;	# symmetrized graph
+
+	# <p> adjust midline to "midline-center"
+	graphs[midline, 1] = graph_midline;
+
+	# <p> adjust symmetric nodes
+	graphsn = apply(symm, 1, function(sn) {
+		symmprep = rbind(
+			c(graph_midline - graph[sn[1], 1], graph[sn[1], 2]),
+			c(graph[sn[2], 1] - graph_midline, graph[sn[2], 2])
+		);
+		means = apply(symmprep, 2, mean);
+		symmetrized = c(graph_midline - means[1], means[2], means[1] + graph_midline, means[2]);
+		symmetrized		
+	});
+	graphs[as.vector(t(symm)), ] = matrix(as.vector(graphsn), byrow = T, ncol = 2);
+
+	r = list(graphs = graphs, grapha = graph - graphs, midline_x = graph_midline);
+	r
+}
+
 # if a certain structure (e.g. triangles) produces several features a corresponding symmetry can be computed
 #	automatically <i>
 graphSymmetryExpand = function(symm, N = 3) {

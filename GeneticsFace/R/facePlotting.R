@@ -35,7 +35,6 @@ plotGraph = function(coords, labels = FALSE, extend = 512, flip = TRUE, labelSiz
 	p
 }
 
-meanGraph = function(coords)apply(coords, 1:2, mean);
 plotMeanGraph = function(coords, labels = FALSE, extend = 512, flip = TRUE) {
 	plotGraph(meanGraph(coords), labels, extend, flip);
 }

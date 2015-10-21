@@ -2,6 +2,22 @@
 #	faceFeatures.R
 #Thu Sep 24 16:03:45 2015
 
+#
+#	<p> graph based helper functions
+#
+
+meanGraph = function(coords)apply(coords, 1:2, mean);
+graphDimensions = function(graph) {
+	mn = apply(graph, 2, min);
+	mx = apply(graph, 2, max);
+	extend = mx - mn;
+	rbind(mn, mx, extend);
+}
+
+#
+#	<p> extract features
+#
+
 featureStructureCoordinate = function(graph, direction) {
 	nodes = as.matrix(1:nrow(graph));
 	nodes

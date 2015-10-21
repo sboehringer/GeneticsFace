@@ -68,78 +68,86 @@ gridColor=function(meanGraph, model, modelDesc, pars){
   return(colorCoefficients)
 }  
 
-coloredPlots=function(feature, meanGraph, modelDesc, colorCoefficients, pars){
-  # Construct colored plots
-  colorFeature=colorCoefficients[[feature]]  
-  color=hsv(h = seq(0.7,0,length.out=pars$n.col), s = pars$s, v = pars$v, alpha=pars$alpha)
-  
-  if(pars$STAND&(var(colorFeature)!=0)) colorFeature=scale(x = colorFeature)
-  if(pars$NORM) {colorFeature=(exp(colorFeature*pars$SCALAR))/(1+exp(colorFeature*pars$SCALAR))}
-  colorFeature=matrix(colorFeature,ncol=pars$Npoints/2,byrow=T)
-  if(pars$MIRRORED) {
-    colorFeature=cbind(colorFeature[,1:ncol(colorFeature)],colorFeature[,ncol(colorFeature):1])
-    colorFeature=colorFeature[nrow(colorFeature):1,]
-  }
-  x=seq(min(meanGraph[,1]),max(meanGraph[,1]),length.out=pars$Npoints)
-  y=seq(min(meanGraph[,2]),max(meanGraph[,2]),length.out=pars$Npoints)
-  if(pars$TRIANGULATION){
-    par(mar=rep(0, 4), xpd = NA) 
-    image(x,y,z = t(colorFeature), col=color,bty ="n",axes=F,frame.plot=F, xaxt='n', ann=FALSE, yaxt='n') #, asp=800/800
-    points(meanGraph[,1], meanGraph[,2],col="red",xlab="",ylab="", main="")
-    textxy(meanGraph[,1], meanGraph[,2],labs=1:nrow(meanGraph), cex = 1, col = "red")
-    for(i in 1:nrow(modelDesc$structure$area)) {
-      ena=modelDesc$structure$area[i,]
-      ena[4]=modelDesc$structure$area[i,1]
-      lines(meanGraph[ena,1], meanGraph[ena,2],lwd=2)
-    }
-  }else{
-    par(mar=rep(0, 4), xpd = NA) 
-    image(x,y,z = t(colorFeature), col=color,bty ="n",axes=F,frame.plot=F, xaxt='n', ann=FALSE, yaxt='n') #, asp=800/800
-  }
+coloredPlots = function(feature, meanGraph, modelDesc, colorCoefficients, pars){
+	# Construct colored plots
+	colorFeature=colorCoefficients[[feature]]  
+	color=hsv(h = seq(0.7,0,length.out=pars$n.col), s = pars$s, v = pars$v, alpha=pars$alpha)
+	
+	if(pars$STAND&(var(colorFeature)!=0)) colorFeature=scale(x = colorFeature)
+	if(pars$NORM) {colorFeature=(exp(colorFeature*pars$SCALAR))/(1+exp(colorFeature*pars$SCALAR))}
+	colorFeature=matrix(colorFeature,ncol=pars$Npoints/2,byrow=T)
+	if(pars$MIRRORED) {
+		colorFeature=cbind(colorFeature[,1:ncol(colorFeature)],colorFeature[,ncol(colorFeature):1])
+		colorFeature=colorFeature[nrow(colorFeature):1,]
+	}
+	x=seq(min(meanGraph[,1]),max(meanGraph[,1]),length.out=pars$Npoints)
+	y=seq(min(meanGraph[,2]),max(meanGraph[,2]),length.out=pars$Npoints)
+
+	tmpImg = tempfile(fileext = '.png');
+	png(tmpImg);
+	par(mar=rep(0, 4), xpd = NA) 
+	image(x,y,z = t(colorFeature), col=color,bty ="n",axes=F,frame.plot=F, xaxt='n', ann=FALSE, yaxt='n') #, asp=800/800
+	if (pars$TRIANGULATION) {
+		points(meanGraph[,1], meanGraph[,2],col="red",xlab="",ylab="", main="")
+		#textxy(meanGraph[,1], meanGraph[,2],labs=1:nrow(meanGraph), cex = 1, col = "red")
+		for(i in 1:nrow(modelDesc$structure$area)) {
+			ena=modelDesc$structure$area[i,]
+			ena[4]=modelDesc$structure$area[i,1]
+			lines(meanGraph[ena,1], meanGraph[ena,2],lwd=2)
+		}
+	}
+	dev.off();
+	readImage(tmpImg);
 }
 
-collapseColorAverg=function(input, average, pars) {
-  MIXcol=1-pars$MIXave;
-  Color = resize(readImage(input), dim(average)[1], dim(average)[2]);
-  Color2 = resize(pars$MIXave*(average)^pars$POWERave+MIXcol*(Color[,,1:3])^pars$POWERcol,
-                  dim(average)[1], dim(average)[2]);
-}
+collapseColorAverg=function(input, meanGraph, average, pars) with(pars, {
+	gdim = graphDimensions(meanGraph);
+	odim = dim(average)[1:2];
+	MIXcol = 1 - MIXave;
+	importance = resize(readImage(input), gdim['extend', 1], gdim['extend', 2]);
+	# Image lives in IVth quadrant
+	importanceT = translate(importance, -c(gdim['mn', 1], odim[2] - gdim['mx', 2]), output.dim = odim);
+	importancePlot = (MIXave * average^POWERave + MIXcol * importanceT[,,1:3]^POWERcol);
+	importancePlot
+})
 
 parsDefault = list(
-	Npoints=100,	# number of points used to construct the (Npoints x Npoints) grid 
-	halfFace=F,   # should grid only be constructed for half of the face
-	midPoint=16,  # if halfFace=T, what is the point in the center of the X axis?
-  n.col=100,		# number of different hues (see example below) for function hsv()
-	s=1, v=1,		  # numeric values in the range [0, 1] for saturation and hue value 
-					      # to be combined to form a vector of colors for function hsv()
-	alpha=.5,		  # numeric vector of values in the range [0, 1] for alpha transparency 
-					      # channel (0 means transparent and 1 means opaque). Needed for choosing 
-					      # transparency of the colored graph in order to see the average black 
-					      # and white image in the background
-	STAND=TRUE,		# should the color coefficients be standardized. need for plots to be comparable
-	NORM=TRUE,		# should the color coefficients be normalized need for plots to be comparable
-	SCALAR = 1,		# numeric value in the range of [0, Inf] used for normalization of color coefficient 
-					      # exp(color*SCALAR)/(1/exp(color*SCALAR))
-	MIRRORED=TRUE,	# should the colors from half of the face be mirrored to the other half? 
-	TRIANGULATION=F,# should the plot of the average individual appear on top of the colored image? 
+	Npoints = 100,			# number of points used to construct the (Npoints x Npoints) grid 
+	halfFace = FALSE,		# should grid only be constructed for half of the face
+	midPoint=16,			# if halfFace=T, what is the point in the center of the X axis?
+	n.col = 100,			# number of different hues (see example below) for function hsv()
+	s=1, v=1,				# numeric values in the range [0, 1] for saturation and hue value 
+							# to be combined to form a vector of colors for function hsv()
+	alpha=.5,				# numeric vector of values in the range [0, 1] for alpha transparency 
+							# channel (0 means transparent and 1 means opaque). Needed for choosing 
+							# transparency of the colored graph in order to see the average black 
+							# and white image in the background
+	STAND = TRUE,			# should the color coefficients be standardized. need for plots to be comparable
+	NORM = TRUE,			# should the color coefficients be normalized need for plots to be comparable
+	SCALAR = 1,				# numeric value in the range of [0, Inf] used for normalization of color coefficient 
+							# exp(color*SCALAR)/(1/exp(color*SCALAR))
+	MIRRORED = TRUE,		# should the colors from half of the face be mirrored to the other half? 
+	TRIANGULATION = FALSE,	# should the plot of the average individual appear on top of the colored image? 
 					        # Useful to see if plots are aligned properly
-	MIXave=.5,		# numeric values in the range [0, 1] for mixing parameter for the colored 
-					      # and background photo. 
-	POWERave=2,		# numeric value in the range [0, Inf] for intensity of colors for the background photo.
-	POWERcol=2		# numeric value in the range [0, Inf] for intensity of colors for the colored photo.
+	MIXave=.5,				# numeric values in the range [0, 1] for mixing parameter for the colored 
+							# and background photo. 
+	POWERave = 2,			# numeric value in the range [0, Inf] for intensity of colors
+							#	for the background photo.
+	POWERcol = 2			# numeric value in the range [0, Inf] for intensity of colors
+							#	for the importance image photo.
 );
 
 importancePlot = function(meanGraph, model, modelDesc, pars = list(), output, average = NULL) {
 	pars = merge.lists(parsDefault, pars);
-	colorCoefficients=gridColor(meanGraph, model, modelDesc, pars)
+	colorCoefficients = gridColor(meanGraph, model, modelDesc, pars)
 	r = lapply(c(modelDesc$features, 'all'), function(feature) {
 		pathImportance = Sprintf('%{output}s-%{feature}s.png');
-		plot_save(
+		writeImage(
 			coloredPlots(feature, meanGraph, modelDesc, colorCoefficients, pars)
-		, plot_path = pathImportance);
-		if (!is.null(average)) plot_save(
-			collapseColorAverg(pathImportance, average, pars)
-		, plot_path = Sprintf('%{output}s-%{feature}s-background.png'))
+		, pathImportance);
+		if (!is.null(average)) writeImage(
+			collapseColorAverg(pathImportance, meanGraph, average, pars)
+		, Sprintf('%{output}s-%{feature}s-background.png'))
 	});
 	r
 }
