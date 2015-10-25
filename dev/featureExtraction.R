@@ -16,8 +16,10 @@ source('../GeneticsFace/R/facePlotting.R');
 source('../GeneticsFace/R/faceSymmetry.R');
 source('../GeneticsFace/R/faceFeatures.R');
 source('../GeneticsFace/R/faceClassification.R');
+source('../GeneticsFace/R/faceVisualization.R');
+
 
 if (1) {
 	load('classifier.RData');
-	importancePlot(meanGraph, model, modelDesc, pars = list(), output, average);
+	importancePlot(meanGraph=gr$graphs, model=rClass$model, modelDesc=dataFeature$desc, pars = list(), output, average);	
 	}
