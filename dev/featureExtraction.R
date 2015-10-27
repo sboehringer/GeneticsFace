@@ -22,6 +22,7 @@ source('../GeneticsFace/R/faceVisualization.R');
 if (0) {
 	load('classifier.RData');
 	importancePlot(meanGraph, model, modelDesc, pars = list(), output, average);
+	#importancePlot(meanGraph=gr$graphs, model=rClass$model, modelDesc=dataFeature$desc, pars = list(), output, average);	
 }
 
 if (1) {

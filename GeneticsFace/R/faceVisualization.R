@@ -127,7 +127,7 @@ parsDefault = list(
 	SCALAR = 1,				# numeric value in the range of [0, Inf] used for normalization of color coefficient 
 							# exp(color*SCALAR)/(1/exp(color*SCALAR))
 	MIRRORED = TRUE,		# should the colors from half of the face be mirrored to the other half? 
-	TRIANGULATION = FALSE,	# should the plot of the average individual appear on top of the colored image? 
+	TRIANGULATION = T,	# should the plot of the average individual appear on top of the colored image? 
 					        # Useful to see if plots are aligned properly
 	MIXave=.5,				# numeric values in the range [0, 1] for mixing parameter for the colored 
 							# and background photo. 
