@@ -41,8 +41,9 @@ readCoordinatesFromFile = function(path, path2metaRegex = NULL, reader = readCoo
 	if (is.null(path2metaRegex)) {
 		d0$type = NA;
 	} else {
-		d0$type = as.character(fetchRegexpr(regex, name, captures = T));
-		if (length(type) == 0) type = NA;
+		type = unlist(matchRegex(path2metaRegex, name)$capture);
+		#d0$type = as.character(fetchRegexpr(regex, name, captures = T));
+		d0$type = if (length(type) == 0) NA else type;
 	}
 	d0
 }
@@ -87,7 +88,8 @@ readCoordinateData = function(path, path2metaRegex = NULL, reader = readCoordina
 	r
 }
 readCoordinateDataFromPathes = function(pathList, imageExts = c('jpg', 'jpeg', 'JPG', 'JPEG')) {
-	d = lapply(pathList, function(p)readCoordinateData(p$path, type = p$type, imageExts = imageExts));
+	d = lapply(pathList, function(p)readCoordinateData(p$path, type = p$type,
+		path2metaRegex = p$groupRegex, imageExts = imageExts));
 	nodes = do.call(cbind, lapply(list.kp(d, 'nodes'), sort));
 	if (!all(apply(nodes, 1, same.vector))) {
 		print(nodes);

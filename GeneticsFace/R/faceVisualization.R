@@ -151,3 +151,17 @@ importancePlot = function(meanGraph, model, modelDesc, pars = list(), output, av
 	});
 	r
 }
+
+importancePlots = function(coords, groups, models, modelDesc, pars = list(), output,
+	averageInput = NULL, globalExtend = 512, outputImportance = '06_importance', plotTriangulation = TRUE) {
+	outputDir = Sprintf('%{output}s/%{outputImportance}s');
+	Dir.create(outputDir);
+	ilapply(levels(groups), function(group, i) {
+		grs = symmetrizedAverageGraph(coords[,, groups == group], flip = TRUE, extend = globalExtend);
+		average = channel(readImage(files = Sprintf('%{averageInput}s/%{group}s.tif')), 'rgb');  
+		importancePlot(grs, models[,i , drop = F], modelDesc, average = average,
+			output = Sprintf('%{outputDir}s/importance-%{group}s'),
+			pars = list(TRIANGULATION = plotTriangulation));
+	});
+}
+
