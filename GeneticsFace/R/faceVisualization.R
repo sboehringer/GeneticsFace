@@ -89,7 +89,7 @@ coloredPlots = function(feature, meanGraph, modelDesc, colorCoefficients, pars){
 	image(x,y,z = t(colorFeature), col=color,bty ="n",axes=F,frame.plot=F, xaxt='n', ann=FALSE, yaxt='n') #, asp=800/800
 	if (pars$TRIANGULATION) {
 		points(meanGraph[,1], meanGraph[,2],col="red",xlab="",ylab="", main="")
-		#textxy(meanGraph[,1], meanGraph[,2],labs=1:nrow(meanGraph), cex = 1, col = "red")
+		textxy(meanGraph[,1], meanGraph[,2],labs=1:nrow(meanGraph), cex = 1, col = "red")
 		for(i in 1:nrow(modelDesc$structure$area)) {
 			ena=modelDesc$structure$area[i,]
 			ena[4]=modelDesc$structure$area[i,1]
