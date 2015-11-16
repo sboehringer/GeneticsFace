@@ -25,8 +25,12 @@ if (0) {
 	#importancePlot(meanGraph=gr$graphs, model=rClass$model, modelDesc=dataFeature$desc, pars = list(), output, average);	
 }
 
+if (0) {
+	load('classifier-data.RData');	
+	importancePlot(meanGraph=r$coords[,,1], model=model, modelDesc=dataFeature$desc, pars = list(), output, average);	
+}
+
 if (1) {
-<<<<<<< Updated upstream
 	load('classifier-data.RData');
 	r = lapply(r, function(e)if (is.character(e)) gsub('data/pictures_converted', '.', e) else e);
 	importancePlots(
@@ -34,8 +38,4 @@ if (1) {
 		output = r$output, averageInput = r$outputAverages
 	);
 }
-=======
-	load('classifier-data.RData');	
-	importancePlot(meanGraph=r$coords[,,1], model=model, modelDesc=dataFeature$desc, pars = list(), output, average);	
-	}
->>>>>>> Stashed changes
+
