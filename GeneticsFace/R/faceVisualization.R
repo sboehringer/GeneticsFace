@@ -2,27 +2,27 @@
 #	faceVisualization.R
 #	(c) 2015 Brunila Balliu
 
-dstPointMatxPoints = function(p1,feature){
-  # compute the distance of a point p1 from each row of a matrix of points
-  # features is a matrix containing coordinates pairs   
-  sqrt(rowSums((p1-feature)^2))
+dstPointMatxPoints = function(p1, feature){
+	# compute the distance of a point p1 from each row of a matrix of points
+	# features is a matrix containing coordinates pairs
+	sqrt(colSums((p1 - t(feature))^2))
 }
 
-centerLine = function(structure,meanGraph) {
+centerLine = function(structure, meanGraph) {
   # compute the center of a distance
   # structure is the integer of the two points comprising the distance
   # meanGraph contains the coordinate pairs (per row) of average individual
-  colSums(meanGraph[structure,])/2
+  colMeans(meanGraph[structure, ])
 }
 
 centroidTriangle = function(structure, meanGraph) {
   # compute the centroid of a triangle
   # structure is the integer of the three points comprising the triangle
   # meanGraph contains the coordinate pairs (per row) of average individual
-  colSums(meanGraph[structure, ])/3
+  colMeans(meanGraph[structure, ])
 }
 
-colorPoint = function(regressCoefficients, distances, distanceFudge = 1) {
+colorPoint = function(distances, regressCoefficients, distanceFudge = 1) {
   # compute color coefficients for one point in a grid
   # regressCoefficients: vector of regression coefficients from glmnet for a feature
   # distances: vector of distances as computed from dstPointMatxPoints
@@ -49,13 +49,13 @@ gridCoordsSymmetry = function(Npoints) {
 }
 
 # identity
-featureCenterCoordinate = function(meanGraph, cfs)meanGraph[rep(cfs$structure,each = 2),];
+featureCenterCoordinate = function(meanGraph, structure)meanGraph[rep(structure[, 1], each = 2), ];
 # midpoint line segment
-featureCenterDistance = function(meanGraph, cfs)t(apply(cfs$structure, 1, centerLine, meanGraph));
+featureCenterDistance = function(meanGraph, structure)t(apply(structure, 1, centerLine, meanGraph));
 # area centroid
-featureCenterArea = function(meanGraph, cfs)t(apply(cfs$structure, 1, centroidTriangle, meanGraph))
+featureCenterArea = function(meanGraph, structure)t(apply(structure, 1, centroidTriangle, meanGraph))
 # angle vertex
-featureCenterAngle = function(meanGraph, cfs)meanGraph[c(t(cfs$structure)), ]
+featureCenterAngle = function(meanGraph, structure)meanGraph[c(t(structure)), ]
 
 
 # Compute color coefficients for each point in a grid based on each feature
@@ -69,10 +69,13 @@ gridColor=function(meanGraph, model, modelDesc, pars){
 	colorCoefficients = nlapply(modelDesc$features, function(feature) {
 		cfs = extractFeatureCoefficients(model, feature , type = 'feature', modelDesc);
 
-		featureCentreFct = get(Sprintf('featureCenter%{feature}u'));
-		featureCentre = featureCentreFct(meanGraph, cfs);
+		featureCenterFct = get(Sprintf('featureCenter%{feature}u'));
+		featureCenter = featureCenterFct(meanGraph, cfs$structure);
 
-		distFeature = t(apply(grid, 1, dstPointMatxPoints, feature = featureCentre));
+		distFeature = t(apply(grid, 1, dstPointMatxPoints, feature = featureCenter));
+		Logs("Feature %{feature}s; #:%{countFeatures}d; #coef: %{countCoeff}d",
+			countFeatures = dim(featureCenter)[1], countCoeff = length(cfs$coefficients), logLevel = 5);
+
 		cls = apply(distFeature, 1, colorPoint, regressCoefficients = cfs$coefficients);
 		if (pars$Symmetrize) cls = cls + cls[iSymm];
 		cls
@@ -87,23 +90,23 @@ coloredPlots = function(feature, meanGraph, modelDesc, colorCoefficients, pars){
 	color = hsv(h = seq(0.7,0,length.out=pars$n.col), s = pars$s, v = pars$v, alpha=pars$alpha);
 
 	if (pars$STAND && (var(colorFeature)!=0)) colorFeature = scale(x = colorFeature)
-	if(pars$NORM) {colorFeature=(exp(colorFeature*pars$SCALAR))/(1+exp(colorFeature*pars$SCALAR))}
-	colorFeature=matrix(colorFeature,ncol=pars$Npoints, byrow = T)
+	if (pars$NORM) {colorFeature=(exp(colorFeature*pars$SCALAR))/(1+exp(colorFeature*pars$SCALAR))}
+
+	colorFeature = matrix(colorFeature, ncol=pars$Npoints, byrow = T)
 	x = seq(min(meanGraph[,1]),max(meanGraph[,1]),length.out=pars$Npoints)
 	y = seq(min(meanGraph[,2]),max(meanGraph[,2]),length.out=pars$Npoints)
 
 	tmpImg = tempfile(fileext = '.png');
 	png(tmpImg);
 	par(mar=rep(0, 4), xpd = NA);
-	image(x,y,z = t(colorFeature),
+	image(x, y, z = t(colorFeature),
 		col = color, bty ="n", axes=F, frame.plot=F, xaxt='n', ann=FALSE, yaxt='n') #, asp=800/800
 	if (pars$TRIANGULATION) {
-		points(meanGraph[,1], meanGraph[,2],col="red",xlab="",ylab="", main="")
-		textxy(meanGraph[,1], meanGraph[,2],labs=1:nrow(meanGraph), cex = 1, col = "red")
-		for(i in 1:nrow(modelDesc$structure$area)) {
-			ena = modelDesc$structure$area[i,]
-			ena[4] = modelDesc$structure$area[i,1]
-			lines(meanGraph[ena,1], meanGraph[ena,2],lwd=2)
+		points(meanGraph[, 1], meanGraph[, 2], col = "red", xlab="", ylab="", main="")
+		textxy(meanGraph[, 1], meanGraph[, 2], labs = 1:nrow(meanGraph), cex = 1, col = "red")
+		for (i in 1:nrow(modelDesc$structure$area)) {
+			ena = c(modelDesc$structure$area[i, ], modelDesc$structure$area[i, 1])
+			lines(meanGraph[ena, 1], meanGraph[ena, 2], lwd = 2)
 		}
 	}
 	dev.off();

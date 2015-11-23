@@ -251,13 +251,18 @@ extractStructureFromDesc = function(feature = 'distance', type = 'feature', desc
 	structureForType(desc$structure[[feature]], desc$symmetries[[symmetryMap[[feature]]]], type);
 }
 
-# type can be feature, asymm, for combined data set assume asymm after feature
-extractFeatureCoefficients = function(model, feature = 'distance', type = 'feature', desc) {
+coefficientIndeces = function(feature = 'distance', type = 'feature', desc) {
 	cs = cumsumR(desc$indeces);
 	csFeature = cumsumI(desc$indeces[[type]], offset = 0);
 	csI = which(names(csFeature) == feature);
 	# <N> assume intercept included into model
-	cfs = model[1 + cs[[type]] + (csFeature[csI]:(csFeature[csI+1] - 1)) ,];
+	i = 1 + cs[[type]] + (csFeature[csI]:(csFeature[csI+1] - 1));
+	i
+}
+
+# type can be feature, asymm, for combined data set assume asymm after feature
+extractFeatureCoefficients = function(model, feature = 'distance', type = 'feature', desc) {
+	cfs = model[coefficientIndeces(feature, type, desc), ];
 	struct = extractStructureFromDesc(feature, type, desc);
 	r = list(coefficients = cfs, structure = struct);
 	r
