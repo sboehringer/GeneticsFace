@@ -325,7 +325,8 @@ pictureAnnotate = function(image, graph, output,
 	if (draw) grid.draw(imageAnnotated);
 	if (!is.null(output)) {
 		Dir.create(splitPath(output)$dir, recursive = TRUE);
-		plot_save(grid.draw(imageAnnotated), plot_path = output, width = dimI[1], height = dimI[2],
+		plot_save(grid.draw(imageAnnotated), plot_path = output,
+			width = valueU(dimI[1], 'points'), height = valueU(dimI[2], 'points'),
 			unit = 'points', unit_out = 'points', quality = quality);
 	}
 	imageAnnotated
