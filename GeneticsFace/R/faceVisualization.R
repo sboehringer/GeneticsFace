@@ -60,7 +60,7 @@ featureCenterAngle = function(meanGraph, structure)meanGraph[c(t(structure)), ]
 
 # Compute color coefficients for each point in a grid based on each feature
 # Need to write description of arguments meanGraph=gr$graphs ; model= rClass$model; modelDesc=dataFeature$desc  
-gridColor=function(meanGraph, model, modelDesc, pars){
+gridColor = function(meanGraph, model, modelDesc, pars){
 	#### Construct a grid of Npoints x Npoints points
 	grid = gridCoords(meanGraph, pars$Npoints);
 	iSymm = gridCoordsSymmetry(pars$Npoints);
@@ -177,3 +177,19 @@ importancePlots = function(coords, groups, models, modelDesc, pars = list(), out
 	});
 }
 
+#
+#	<p> summary statistics
+#
+
+featureCounts = function(graph, classification, features, components, struct, symms) {
+	idcs = coefficientIndecesFromMeanGraph(graph, features, components, struct, symms);
+
+	cfs = classification$rClass$coefficients;
+	r = sapply(dimnames(cfs)[[2]], function(class) {
+		sapply(names(idcs), function(comp) {
+			sapply(names(idcs[[comp]]), function(feature)sum(cfs[idcs[[comp]][[feature]], class] != 0))
+		})
+	});
+	dimnames(r)[[1]] = pastem(components, features, sep = ':');
+	r
+}

@@ -178,7 +178,6 @@ extractAngle = function(graph, structure, symmetries = NULL) {
 	be = acos((dq['a', ] + dq['c', ] - dq['b', ]) / (2 * d['a', ] * d['c', ]));
 	ga = acos((dq['a', ] + dq['b', ] - dq['c', ]) / (2 * d['a', ] * d['b', ]));
 	angle = vector.intercalate(al, be, ga);
-
 	if (is.null(symmetries)) return(list(feature = angle));
 	r = symmetrizeFeature(angle, structure, graphSymmetryExpand(symmetries$triangle, N = 3));
 	r
@@ -227,7 +226,7 @@ extractFeaturesArray = function(coords, features = 'distance', structure, symmet
 #
 
 # create full matrix and descriptor based on components
-dataComponents = function(fts, components) {
+dataComponents = function(fts, components = names(fts$desc$indeces)) {
 	data = do.call(cbind, fts[components]);
 	desc = fts$desc;
 	desc$indeces = desc$indeces[components];
@@ -259,6 +258,14 @@ coefficientIndeces = function(feature = 'distance', type = 'feature', desc) {
 	i = 1 + cs[[type]] + (csFeature[csI]:(csFeature[csI+1] - 1));
 	i
 }
+coefficientIndecesAll = function(desc) {
+	components = names(desc$indeces);
+	features = names(desc$indeces[[1]]);
+	r = nlapply(components, function(component)nlapply(features, function(feature)
+		coefficientIndeces(feature, component, desc)
+	));
+	r
+}
 
 # type can be feature, asymm, for combined data set assume asymm after feature
 extractFeatureCoefficients = function(model, feature = 'distance', type = 'feature', desc) {
@@ -267,5 +274,20 @@ extractFeatureCoefficients = function(model, feature = 'distance', type = 'featu
 	r = list(coefficients = cfs, structure = struct);
 	r
 }
+
+#	graph = symmetrizeGraph(meanGraph(d$coords));
+coefficientIndecesFromMeanGraph = function(graph,
+	features = c('coordinate', 'distance', 'area', 'angle'), components = c('feature', 'asymm'),
+	struct, symms) {
+	# <p> operate on pseude-data represented by mean-graph
+	mg = array(graph$graphs, dim = c(dim(graph$graphs), 1));
+	fts = extractFeaturesArray(mg, features, structure = struct, symmetries = symms);
+
+	# <p> compute # in components, components
+	data = dataComponents(fts, components);
+	idcs = coefficientIndecesAll(data$desc);
+	idcs
+}
+
 
 

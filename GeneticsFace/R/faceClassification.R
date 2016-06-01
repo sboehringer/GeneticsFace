@@ -48,24 +48,55 @@ glmnetModel = function(r0) {
 	r1
 }
 
+aPrioriClass = function(group) {
+	freqs = table(group)/length(group);
+	r = (freqs %*% freqs)[1, 1];
+	r
+}
+
+testClassification = function(group, prediction) {
+	truthPred = cbind(as.character(group), unlist(prediction));
+	accuracy = mean(matrix.same(truthPred));
+	aP = aPrioriClass(group);
+	N = length(group);
+	bt = binom.test(round(accuracy * N, 0), N, p = aP, alternative = 'greater');
+	r = list(N = N, accuracyApriori = aP, accuracy = accuracy, p.value = bt$p.value, groups = table(group));
+	r
+}
+
 #@arg cv_fold By default leave-one-out crossvalidation is performed: cv_fold == -1
 
-classifyFaceFeatures = function(response, feature, cv_fold = -1, parallel = FALSE,
+classifyFaceFeaturesRaw = function(response, feature, cv_fold = -1, parallel = FALSE,
 	trainer = glmnet_train, tester = glmnet_test_multinomial, Nrepeat = 1, cv_fold_inner = -1,
 	alpha = .5, family = 'multinomial') {
 	feature = t(apply(feature, 1, standardize));
 	data = data.frame(response = response, feature = feature);
 	respClasses = if (is.factor(response)) levels(response) else unique(response);
-	modelData = trainer(data, cv_fold = cv_fold_inner,
+	modelData = trainer(data,
 		family = family, type.measure = 'class', alpha = alpha);
-	pred = crossvalidate(trainer, tester, data = data, parallel = parallel, cv_repeats = Nrepeat);
+	pred = crossvalidate(trainer, tester, data = data, parallel = parallel,
+		cv_fold = cv_fold_inner, cv_repeats = Nrepeat);
 	# <p> reinstate original response-labels
 	pred1 = lapply(pred, function(e)sapply(e, function(e) {
 		r = respClasses[e];
 		names(r) = names(e);
 		r
 	}));
-	r = list(model = modelData, coefficients = glmnetModel(modelData), prediction = pred1);
+	r = list(model = modelData, alpha = alpha, coefficients = glmnetModel(modelData),
+		prediction = pred1,
+		test = testClassification(response, pred1)
+	);
+	r
+}
+
+classifyFaceFeatures = function(response, feature, cv_fold = -1, parallel = FALSE,
+	trainer = glmnet_train, tester = glmnet_test_multinomial, Nrepeat = 1, cv_fold_inner = -1,
+	alphas = seq(.05, .5, length.out = 10), family = 'multinomial') {
+	rAlphas = lapply(alphas, function(alpha)
+		classifyFaceFeaturesRaw(response, feature, cv_fold, parallel,
+			trainer, tester, Nrepeat, cv_fold_inner, alpha, family));
+	iBest = which.min(list.kp(rAlphas, 'test$accuracy', do.unlist = T));
+	r = c(rAlphas[[iBest]], list(classificationAlphas = rAlphas));
 	r
 }
 

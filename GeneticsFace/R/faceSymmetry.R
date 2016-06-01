@@ -114,6 +114,8 @@ graphSymmetryTriangles = function(graph, direction = 1)list(pairs = delaunaySymm
 #	<p> graph pre-processing
 #
 
+# should work for 2D, 3D, and kD (untested) data
+# assume: coord 1 is X-coordinate
 symmetrizeGraph = function(graph, nodeSymmetries = symmetry_visigenStd) {
 	# <p> indeces and global midline
 	nodes = dimnames(graph)[[1]];
@@ -135,14 +137,14 @@ symmetrizeGraph = function(graph, nodeSymmetries = symmetry_visigenStd) {
 	# <p> adjust symmetric nodes
 	graphsn = apply(symm, 1, function(sn) {
 		symmprep = rbind(
-			c(graph_midline - graph[sn[1], 1], graph[sn[1], 2]),
-			c(graph[sn[2], 1] - graph_midline, graph[sn[2], 2])
+			c(graph_midline - graph[sn[1], 1], graph[sn[1], -1]),
+			c(graph[sn[2], 1] - graph_midline, graph[sn[2], -1])
 		);
 		means = apply(symmprep, 2, mean);
-		symmetrized = c(graph_midline - means[1], means[2], means[1] + graph_midline, means[2]);
-		symmetrized		
+		symmetrized = c(graph_midline - means[1], means[-1], means[1] + graph_midline, means[-1]);
+		symmetrized
 	});
-	graphs[as.vector(t(symm)), ] = matrix(as.vector(graphsn), byrow = T, ncol = 2);
+	graphs[as.vector(t(symm)), ] = matrix(as.vector(graphsn), byrow = T, ncol = dim(graph)[2]);
 
 	r = list(graphs = graphs, grapha = graph - graphs, midline_x = graph_midline);
 	r

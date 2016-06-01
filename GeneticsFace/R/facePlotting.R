@@ -43,8 +43,10 @@ plotMeanGraph = function(coords, labels = FALSE, extend = 512, flip = TRUE) {
 #	caricature functions
 #
 
+vectorCross3d = function(v1, v2)sapply(1:3, function(i)det(cbind(v1[-i], v2[-i])));
 # cross product of two 2d vectors embeded into 3d
-vectorCross = function(v1, v2)c(0, 0, det(cbind(v1, v2)))
+vectorCross2d = function(v1, v2)c(0, 0, det(cbind(v1, v2)))
+vectorCross = function(v1, v2)if (length(v1) == 2) vectorCross2d(v1, v2) else vectorCross3d(v1, v2);
 
 # vectorized for angle-argument
 circlePoint = function(center, radius, angle)
