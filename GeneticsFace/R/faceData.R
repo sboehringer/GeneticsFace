@@ -41,8 +41,42 @@ symmetry_visigenStd = matrix(c(
 ), byrow = T, ncol = 2);
 Nsymmetry_visigenStd = length(unique(as.vector(symmetry_visigenStd)));
 
-readCoordinateFile_visigen = function(path) {
-	readTable(sprintf('[SEP=T,HEADER=F,NAMES=node;x;y]:%s', path));
+#				6
+#	 9			5			2
+# 10   8				  3	  1
+#	11						4
+#				7
+#		12				16
+#			13  14	  15
+#
+#				17
+#		18				20
+#				19
+#				21
+
+symmetry_visigen2d = symmetry_visigen3d = matrix(c(
+	'1', '10',
+	'2', '9',
+	'3', '8',
+	'4', '11',
+	'5', '5',
+	'6', '6',
+	'7', '7',
+	'12', '16',
+	'13', '15',
+	'14', '14',
+	'17', '17',
+	'18', '20',
+	'19', '19',
+	'21', '21'
+), byrow = T, ncol = 2);
+Nsymmetry_visigen2d = Nsymmetry_visigen3d = length(unique(as.vector(symmetry_visigen3d)));
+
+readCoordinateFile_visigen2d = readCoordinateFile_visigen = function(path, nodeRe = '^k?(\\d+)') {
+	t1 = t0 = readTable(sprintf('[SEP=T,HEADER=F,NAMES=node;x;y]:%s', path));
+	row.names(t1) = t1$node = (if (!is.null(nodeRe))
+		FetchRegexpr(nodeRe, t0$node, captures = T) else t0$node);
+	t1
 }
 
 #
@@ -68,14 +102,33 @@ list2xml = function(l, rootName = 'root', asDocument = FALSE) {
 	r
 }
 
+# xmlTemplateModelGraph = list(
+# 	GraphType = 'MODEL_GRAPH',
+# 	NumberOfNodes = NA,
+# 	NumberOfEdges = 0,
+# 	Trafo = list(
+# 		TrafoType = 'GABOR',
+# 		NumberOfLevels = 5,
+# 		NumberOfDirections = 8,
+# 		Maximum = 1.5708,
+# 		Factor = 0.707107,
+# 		Sigma = 6.28319,
+# 		DcFree = 1,
+# 		SpaceAccuracy = 3
+# 	),
+# 	#Topology = list(Edge = list(SourceNode = 1, TargetNode = 2))
+# 	Topology = list(),
+# 	#EdgeList = list(Edge = list(Index = 1, EdgeInfoType = 'MODEL_EDGE_INFO'))
+# 	EdgeList = list()
+# );
 xmlTemplateModelGraph = list(
 	GraphType = 'MODEL_GRAPH',
 	NumberOfNodes = NA,
 	NumberOfEdges = 0,
 	Trafo = list(
 		TrafoType = 'GABOR',
-		NumberOfLevels = 5,
-		NumberOfDirections = 8,
+		NumberOfLevels = 8,
+		NumberOfDirections = 10,
 		Maximum = 1.5708,
 		Factor = 0.707107,
 		Sigma = 6.28319,
@@ -118,12 +171,15 @@ readCoordinateFile_ini = function(path, input) {
 	);
 }
 
+# convert from 1st to 4th quadrand by default
 prepareAveraging_ini = function(pathImg, coords, output,
 	pathImgConverted = Sprintf('%{output}s/%{base}s.tif', base = splitPath(pathImg)$base),
-	pathGraph = Sprintf('%{output}s/%{base}s.xml', base = splitPath(pathImg)$base)) {
+	pathGraph = Sprintf('%{output}s/%{base}s.xml', base = splitPath(pathImg)$base),
+	outputExtend = 512, doFlip = TRUE) {
 
+	if (doFlip) coords[, 2] = outputExtend - coords[, 2];
 	writeCoordinateFile_ini(coords, output = pathGraph);
-	convertImage(pathImg, pathImgConverted);
+	convertImageRaw(pathImg, pathImgConverted);
 
 	cmd = Sprintf(con('ini_X64 --extract-jets --gabor-trafo-type Gray ',
 		'--input-graph %{pathGraph}Q ',
@@ -152,5 +208,5 @@ averageGraphs_ini = function(collection, name, sel, output, size_x = 512, size_y
 		'--input-graph %{averageGraph}Q ',
 		'--output-image %{output}Q/%{name}Q.tif '));
 	System(cmd, 2);
-	convertImage(Sprintf('%{output}Q/%{name}Q.tif'), Sprintf('%{output}Q/%{name}Q.jpg'));
+	convertImageRaw(Sprintf('%{output}Q/%{name}Q.tif'), Sprintf('%{output}Q/%{name}Q.jpg'));
 }

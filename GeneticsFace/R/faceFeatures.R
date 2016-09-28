@@ -53,8 +53,14 @@ extractCoordinate = function(graph, structure, symmetries = NULL) {
 	symm = symmetries$node;
 	# <p> symmetrical features
 	coordsS = apply(symm$pairs, 1, function(pair) {
-		mnSelf = mn = apply(coords[, pair], 1, mean);
-		mnSelf[symm$direction] = symm$selfSymmetryRef;
+		# <p> bring symmetry coordinate into order
+		o = order(coords[symmetries$node$direction, pair]);
+		pair = pair[o];
+		# <p> compute mean accoring to line of symmetry
+		coordsPair = cbind(coords[, pair[1]], symm$selfSymmetryRef - coords[, pair[2]]);
+		mnSelf = mn = apply(coordsPair, 1, mean);
+		#mnSelf = mn = apply(coords[, pair], 1, mean);
+		#mnSelf[symm$direction] = symm$selfSymmetryRef;
 		asymm = coords[, pair[1]] - (if (pair[1] == pair[2]) mnSelf else mn);
 		c(mn, asymm)
 	});
@@ -250,26 +256,26 @@ extractStructureFromDesc = function(feature = 'distance', type = 'feature', desc
 	structureForType(desc$structure[[feature]], desc$symmetries[[symmetryMap[[feature]]]], type);
 }
 
-coefficientIndeces = function(feature = 'distance', type = 'feature', desc) {
+coefficientIndeces = function(feature = 'distance', type = 'feature', desc, offset = 1) {
 	cs = cumsumR(desc$indeces);
 	csFeature = cumsumI(desc$indeces[[type]], offset = 0);
 	csI = which(names(csFeature) == feature);
 	# <N> assume intercept included into model
-	i = 1 + cs[[type]] + (csFeature[csI]:(csFeature[csI+1] - 1));
+	i = offset + cs[[type]] + (csFeature[csI]:(csFeature[csI+1] - 1));
 	i
 }
-coefficientIndecesAll = function(desc) {
+coefficientIndecesAll = function(desc, offset = 1) {
 	components = names(desc$indeces);
 	features = names(desc$indeces[[1]]);
 	r = nlapply(components, function(component)nlapply(features, function(feature)
-		coefficientIndeces(feature, component, desc)
+		coefficientIndeces(feature, component, desc, offset = offset)
 	));
 	r
 }
 
 # type can be feature, asymm, for combined data set assume asymm after feature
-extractFeatureCoefficients = function(model, feature = 'distance', type = 'feature', desc) {
-	cfs = model[coefficientIndeces(feature, type, desc), ];
+extractFeatureCoefficients = function(model, feature = 'distance', type = 'feature', desc, offset = 1) {
+	cfs = model[coefficientIndeces(feature, type, desc, offset = offset), ];
 	struct = extractStructureFromDesc(feature, type, desc);
 	r = list(coefficients = cfs, structure = struct);
 	r
@@ -278,16 +284,45 @@ extractFeatureCoefficients = function(model, feature = 'distance', type = 'featu
 #	graph = symmetrizeGraph(meanGraph(d$coords));
 coefficientIndecesFromMeanGraph = function(graph,
 	features = c('coordinate', 'distance', 'area', 'angle'), components = c('feature', 'asymm'),
-	struct, symms) {
+	struct, symms, offset = 1) {
 	# <p> operate on pseude-data represented by mean-graph
 	mg = array(graph$graphs, dim = c(dim(graph$graphs), 1));
 	fts = extractFeaturesArray(mg, features, structure = struct, symmetries = symms);
 
 	# <p> compute # in components, components
 	data = dataComponents(fts, components);
-	idcs = coefficientIndecesAll(data$desc);
+	idcs = coefficientIndecesAll(data$desc, offset = offset);
 	idcs
 }
 
+#
+#	<p> create names for features
+#
 
+featureNamesCoordinate = function(struct, symms) {
+	coords = pastem(symms$node$pairs[, 1], c('x', 'y', 'z', 'v', 'w')[1:symms$node$dim], sep = '_');
+	paste('c', coords, sep = '_')
+}
+featureNamesDistance = function(struct, symms) {
+	paste('d',
+		sapply(c(symms$distance$pairs[, 1], symms$distance$nonpaired), function(i)
+			paste(struct$distance[i, ], collapse = '_')),
+	sep = '_')
+}
+featureNamesTriangle = function(struct, symms, prefix = 'ar', m = NULL) {
+	paste(prefix,
+		sapply(symms$triangle$pairs[, 1], function(i) {
+			r = paste(struct[i, ], collapse = '_');
+			if (!is.null(m)) pastem(r, m, sep = '_') else r;
+		}), sep = '_')
+}
+featureNamesArea = function(struct, symms)featureNamesTriangle(struct$area, symms, prefix = 'ar');
+featureNamesAngle = function(struct, symms)
+	featureNamesTriangle(struct$angle, symms, prefix = 'an', m = c('a', 'b', 'c'));
 
+featureNames = function(struct, symms, features = names(struct)) {
+	fs = nlapply(features, function(feature) {
+		feature = get(Sprintf('featureNames%{feature}u'));
+		feature(struct, symms);
+	});
+}

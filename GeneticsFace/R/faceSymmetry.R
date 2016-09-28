@@ -51,8 +51,10 @@ graphSymmetry = function(graph, elements, direction = 1, eps = 1e-5, selfSymmetr
 	});
 	spairs = epairs[s, ];
 	dimnames(spairs)[[2]] = paste('symm', 1:2, sep = '');
-	if (!selfSymmetry) return(list(pairs = spairs, direction = direction));
-	r = list(pairs = spairs, direction = direction, selfSymmetryRef = midline);
+	nonpaired = setdiff(1:nrow(elements), unique(as.vector(spairs)));
+	if (!selfSymmetry) return(list(pairs = spairs, direction = direction, nonpaired = nonpaired));
+	r = list(pairs = spairs, direction = direction, selfSymmetryRef = midline,
+		dim = dim(graph)[2], nonpaired = nonpaired);
 	r
 }
 
@@ -64,10 +66,10 @@ graphSymmetry = function(graph, elements, direction = 1, eps = 1e-5, selfSymmetr
 #	creating a fully symmetric triangulation
 
 # get a graph segment based on a direction and a percentage of extend to be included
-graphPartition = function(graph, direction = 1, threshold = .5) {
+graphPartition = function(graph, direction = 1, threshold = .5, eps = 1e-5) {
 	rng = range(graph[, direction]);
 	thresholdAbs = rng[1] + (rng[2] - rng[1]) * threshold;
-	graphPart = which(graph[, direction] <= thresholdAbs);
+	graphPart = which(graph[, direction] <= thresholdAbs + eps);
 	graph[graphPart, ]
 }
 
@@ -78,7 +80,9 @@ matrix2dictSymm = function(m) {
 }
 
 # graph assumed to be symmterized
-delaunaySymm = function(graph, direction = 1) {
+# use two dimensions to compute triangulation
+delaunaySymm = function(graph, direction = 1, useDimensions = 1:2) {
+	graph = graph[, useDimensions, drop = F];
 	nodeSymm = graphSymmetry(graph, as.matrix(1:nrow(graph)), selfSymmetry = TRUE)$pairs;
 	nodeSymmNs = matrix(rownames(graph)[nodeSymm], ncol = 2);	# by name
 	nodeSymmDict = matrix2dictSymm(nodeSymmNs);

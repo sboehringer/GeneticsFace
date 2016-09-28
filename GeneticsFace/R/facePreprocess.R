@@ -2,7 +2,32 @@
 #	facePreprocess.R
 #Mon Aug 31 12:18:52 CEST 2015
 
-defaultExts = c('jpg', 'jpeg', 'JPG', 'JPEG');
+#
+#	<p> Coordinates
+#
+#	Coordinates are handled in the first quadrant. Reader should therefore convert to 1st quadrant
+#	coordinates. EBimage handles images in the 4th quadrant, requiring coordinate transformation.
+
+defaultExts = c('jpg', 'jpeg', 'JPG', 'JPEG', 'png', 'PNG');
+
+removeExclusions = function(files, removeIds = NULL) {
+	if (!is.null(removeIds)) {
+		remove = sapply(files, function(e)splitPath(e)$base) %in% removeIds;
+		Logs("Removed %{N}d data sets.", N = sum(remove), logLevel = 5);
+		files = files[!remove];
+	}
+	files
+}
+
+applyPathesFiles = function(pathes, f, ..., extension, noMerge = FALSE, removeIds = NULL) {
+	r = lapply(pathes, function(p) {
+		files = removeExclusions(list_files_with_exts(p$path, extension), removeIds);
+		lapply(files, function(path)f(path, ...))
+	});
+	if (noMerge) return(r);
+	r1 = merge.lists(r, listOfLists = T, concat = T, useIndeces = T);
+	r1
+}
 
 applyPathes = function(pathes, f, ..., noMerge = FALSE) {
 	r = lapply(pathes, function(p)f(p$path, ...))
@@ -11,20 +36,22 @@ applyPathes = function(pathes, f, ..., noMerge = FALSE) {
 	r1
 }
 
-convertImage = function(input, output, quality = 80L) {
+convertImageRaw = function(input, output, quality = 80L) {
 	cmd = Sprintf("convert -quality %{quality}s %{input}Q %{output}Q");
-	System(cmd, 3);
+	System(cmd, 5);
+}
+
+convertImage = function(path, output, outputFormat = 'jpg', quality = 95L) {
+	base = splitPath(path)$base;
+	outputPath = Sprintf("%{output}s/%{base}s.%{outputFormat}s");
+	convertImageRaw(path, outputPath, quality);
+	outputPath
 }
 
 convertImages = function(path, output, extension = defaultExts, outputFormat = 'jpg', quality = 95L) {
 	files = list_files_with_exts(path, extension);
 	Dir.create(output, recursive = TRUE);
-	r = lapply(files, function(path){
-		base = splitPath(path)$base;
-		outputPath = Sprintf("%{output}s/%{base}s.%{outputFormat}s");
-		convertImage(path, outputPath, quality);
-		outputPath
-	});
+	r = lapply(files, convertImage, output = output, outputFormat = outputFormat, quality = quality);
 	r
 }
 
@@ -68,17 +95,19 @@ dataAlignNodes = function(data) {
 	list(coords = d, nodes = nodesRef)
 }
 
-#' @arg path Path to folder from which files with extension `pos` are parsed
+#' @arg path Path to folder from which files with extension coordinateExt are parsed
 #' @arg path2metaRegex Provide regular expression that is applied to the path and caputres of which
 #'   are used as meta-information returned in the type column of the result data frame
+#' @arg coordinateExt file extension of coordinate files. Defaults to 'pos'.
 readCoordinateData = function(path, path2metaRegex = NULL, reader = readCoordinateFile_visigen,
-	imageExts = c('jpg', 'jpeg', 'JPG', 'JPEG'), type = NULL) {
-	files = list_files_with_exts(path, 'pos');
+	imageExts = defaultExts, type = NULL, removeIds = NULL, coordinateExt = 'pos') {
+	files = list_files_with_exts(path, coordinateExt);
 	if (!all(
 		sort(sapply(list_files_with_exts(path, imageExts), function(f)splitPath(f)$base)) ==
 		sort(sapply(files, function(f)splitPath(f)$base)))) {
 		stop(Sprintf('Mismatch coordinate, image files in: %{path}s'));
 	}
+	files = removeExclusions(files, removeIds);
 	r0 = lapply(files, readCoordinatesFromFile, reader = reader, path2metaRegex = path2metaRegex);
 	r1 = dataAlignNodes(do.call(rbind, r0));
 	# <p> return
@@ -87,9 +116,19 @@ readCoordinateData = function(path, path2metaRegex = NULL, reader = readCoordina
 	r = list(coord = d, nodes = r1$nodes);
 	r
 }
-readCoordinateDataFromPathes = function(pathList, imageExts = c('jpg', 'jpeg', 'JPG', 'JPEG')) {
-	d = lapply(pathList, function(p)readCoordinateData(p$path, type = p$type,
-		path2metaRegex = p$groupRegex, imageExts = imageExts));
+readCoordinatesDefaults = list(flip = FALSE, flipExtend = 512, reader = 'readCoordinateFile_visigen');
+readCoordinateDataFromPathes = function(pathList,
+	imageExts = defaultExts, removeIds = NULL, reader = 'readCoordinateFile_visigen', coordinateExt = 'pos') {
+	defaults = merge.lists(readCoordinatesDefaults, list(coordinateExt = coordinateExt, reader = reader));
+	d = lapply(pathList, function(p) {
+		p = merge.lists(defaults, p);
+		if (is.character(p$reader)) p$reader = get(p$reader);
+		d = readCoordinateData(p$path, type = p$type,
+			path2metaRegex = p$groupRegex, imageExts = imageExts, removeIds = removeIds,
+			reader = p$reader, coordinateExt = p$coordinateExt);
+		if (p$flip) d$coord$y = p$flipExtend - d$coord$y;
+		d
+	});
 	nodes = do.call(cbind, lapply(list.kp(d, 'nodes'), sort));
 	if (!all(apply(nodes, 1, same.vector))) {
 		print(nodes);
@@ -179,15 +218,17 @@ homI = function(d)d[, 1:2]
 # Xt: transformed data
 # X' T = Xr' (priming -> homogenous coordinates) => T = X'^- Xr'
 affineBetween = function(X, Xt) {
-	ginv(hom(X)) %*% hom(Xt)
+	t(ginv(hom(X)) %*% hom(Xt))
 }
 
 # http://math.stackexchange.com/questions/237369/given-this-transformation-matrix-how-do-i-decompose-it-into-translation-rotati
 # http://math.stackexchange.com/questions/13150/extracting-rotation-scale-values-from-2d-transformation-matrix/13165#13165
 # @result list to be read as follows: rot -> scale -> translate or scale -> rot -> translate
 
+# assume coords to be row-wise
+affApply = function(aff, coords)homI(t(aff %*% t(hom(coords))))
+
 affine2components = function(m) {
-	m = t(m);
 	sx = vector.norm(m[1, 1:2]) * sign(m[1, 1]);
 	sy = vector.norm(m[2, 1:2]) * sign(m[2, 2]);
 	phi = atan2(-m[1, 2], m[1, 1]);
@@ -201,7 +242,7 @@ components2affine = function(aff) with(aff, {
 		scale[2] * sin(rot[1]), scale[2] * cos(rot[1]), translate[2],
 		0, 0, 1
 	), nrow = 3, ncol = 3, byrow = T);
-	t(m)
+	m
 })
 affineCreate = function(scale = c(1, 1), rot = c(0, 0), translate = c(0, 0)) {
 	components2affine(list(translate = translate, scale = scale, rot = rot));
@@ -212,8 +253,7 @@ affRotate = function(data, aff) with(aff, {
 		cos(rot[1]), -sin(rot[1]),
 		sin(rot[1]), cos(rot[1])
 	), nrow = 2, ncol = 2, byrow = T);
-	data %*% t(m)
-	
+	affApply(m, data)
 })
 
 affScale = function(data, aff) with(aff, {
@@ -221,7 +261,7 @@ affScale = function(data, aff) with(aff, {
 		scale[1], 0,
 		0, scale[2]
 	), nrow = 2, ncol = 2, byrow = T);
-	data %*% t(m)
+	affApply(m, data)
 })
 
 affTranslate = function(data, aff) with(aff, {
@@ -232,6 +272,7 @@ affTranslate = function(data, aff) with(aff, {
 affPerform = function(data, aff) {
 	affTranslate(affScale(affRotate(data, aff), aff), aff);
 }
+
 
 boundingBox = function(a) {
 	list(
@@ -264,13 +305,19 @@ pictureDimensions = function(path) {
 #	add translation to center to target coordinates
 #	compute borders to result in a square image
 #	generate imagemagick/graphicsmagick command
+#	multiplication of is right to left (right-most transformation applied first)
 #
 
 pictureMap2output = function(aff, outputDim, scale = 1) {
 	# rescale to fit target size
-	aff = aff %*% affineCreate(scale = rep(scale, 2));
-	aff[3, 1:2] = aff[3, 1:2] + outputDim/2;
-	aff
+	affS = affineCreate(scale = rep(scale, 2));
+	# final translation is on original scale
+	#affT = affineCreate(translate = rep(outputDim/2, 2)) %*% ginv(affS);
+	affT = affineCreate(translate = rep(outputDim/2, 2));
+	#aff[3, 1:2] = aff[3, 1:2] + outputDim/2;
+	#aff[3, 1:2] = affC$translate + outputDim/2;
+	affR = affT %*% affS %*% aff;
+	affR
 }
 
 #' @arg recenter: assume aff is centered around the origin, recenter to middle coordinate of the picture
@@ -288,9 +335,15 @@ pictureTransformImageMagick = function(path, aff, outputDir, outputDim = picture
 	System(cmd, 2);
 }
 
+# aff: 3x3 matrix for right multiplication of column vectors
+# picture coordinate system is in 4th quadrant -> conjugate with flipping operation
 pictureTransform = function(image, aff, output = NULL, outputDim = 512, quality = 1, background = gray(.6)) {
 	image = channel(image, 'gray');
-	imageTrans = affine(image, aff, output.dim = outputDim, bg.col = background);
+	affC = affineCreate(scale = c(1, -1), translate = c(0, outputDim));
+	affP = ginv(affC) %*% aff %*% affC;
+	#afft = t(aff[1:2, ])
+	afft = t(affP[1:2, ])
+	imageTrans = affine(image, afft, output.dim = outputDim, bg.col = background);
 	if (!is.null(output)) {
 		Dir.create(splitPath(output)$dir, recursive = TRUE);
 		writeImage(imageTrans, output, quality = quality * 1e2);
@@ -312,8 +365,10 @@ pictureAnnotateImageMagick = function(path, graph, outputDir, scale = 1, borders
 }
 
 # <!> png makes white stripes
+#install_github('oldGridExtra', 'ttriche')
+# flipY depracted, should be handled when reading the file
 pictureAnnotate = function(image, graph, output,
-	colorNode = rgb(1, 0, 0), gridUnit = 'points', flipY = TRUE, nodeSize = 4, draw = FALSE,
+	colorNode = rgb(1, 0, 0), gridUnit = 'points', flipY = FALSE, nodeSize = 4, draw = FALSE,
 	quality = 95L) {
 	dimI = dim(image)[1:2];
 	if (flipY) graph[, 2] = dimI[2] - graph[, 2];
@@ -359,11 +414,18 @@ procrustesTransformImages = function(path, output,
 	outputDirTransform = con(output, '/02_transformed'),
 	outputDirAnnotationTransf = con(output, '/03_transformed_annotated'),
 	readCoordinates = readCoordinateDataFromPathes,
-	annotate = T, dimTarget = rep(512, 2), margin = .05, ..., backGround) {
+	annotate = T, dimTarget = rep(512, 2), margin = .05, ..., backGround, removeIds = NULL) {
 
+	Dir.create(output);
 	if (!is.list(path)) path = list(list(path = path));
-	d = readCoordinates(path, ...);
-	pathesRaw = unlist(applyPathes(path, convertImages, output = outputDirRaw, noMerge = T));
+	d = readCoordinates(path, ..., removeIds = removeIds);
+	Dir.create(outputDirRaw);
+	pathesRaw = unlist(applyPathesFiles(path, convertImage, removeIds = removeIds, noMerge = T,
+			output = outputDirRaw, extension = defaultExts));
+	if (length(levels(d$coord$id)) != length(pathesRaw)) {
+		stop(Sprintf("Coordinate data (N = %{Ncoord}d) does not match image files (N = %{Nfiles}d)",
+			Ncoord = length(levels(d$coord$id)), Nfiles = length(pathesRaw)));
+	}
 	a = table2array(d$coord);
 	pa = performProcrustes(a);
 	scale = scaleFromBoundingBox(boundingBox(pa$rotated), dimTarget, margin);
@@ -372,25 +434,27 @@ procrustesTransformImages = function(path, output,
 		image = readImage(path);
 		base = splitPath(path)$base;
 		outputAnnot = Sprintf('%{outputDirAnnotation}s/%{base}s.jpg');
-		if (annotate) pictureAnnotate(image, a[, , i], outputAnnot);
+		if (annotate) pica = pictureAnnotate(image, a[, , i], outputAnnot);
 
 		aff = affineBetween(a[, , i], pa$rotated[, , i]);
-		rot = affine2components(aff);
+		#rot = affine2components(aff);
 		#rot$rot[1] = 20/360 * (2 * pi);
-		aff = components2affine(rot);
+		#aff = components2affine(rot);
 		affImg = pictureMap2output(aff, dimTarget, scale);
+		#affImg = affineCreate(translate = c(10, 10));
 		outputTrans = Sprintf('%{outputDirTransform}s/%{base}s.jpg');
-		imageTrans = pictureTransform(image, affImg[, 1:2], output = outputTrans, outputDim = dimTarget);
+		imageTrans = pictureTransform(image, affImg, output = outputTrans, outputDim = dimTarget);
 
-		paCoords = homI(hom(a[, , i]) %*% affImg);
+		paCoords = affApply(affImg, a[, , i]);
 		outputTransAnnot = Sprintf('%{outputDirAnnotationTransf}s/%{base}s.jpg');
-		if (annotate) pictureAnnotate(imageTrans, paCoords, output = outputTransAnnot);
+		if (annotate) picat = pictureAnnotate(imageTrans, paCoords, output = outputTransAnnot);
 		paCoords
 	});
 	coords = array(unlist(coords), dim = c(dim(coords[[1]]), length(coords)));
 	dimnames(coords) = dimnames(a);
 	ids = sapply(pathesRaw, function(e)splitPath(e)$base);
 	r = list(id = ids, group = unique(d$coord[, c('id', 'type')])$type, coords = coords,
+		outputExtend = dimTarget,
 		# paths
 		images = pathesRaw, input = path, output = output,
 		outputDirRaw = outputDirRaw, outputDirAnnotation = outputDirAnnotation,
@@ -414,7 +478,8 @@ prepareAveraging = function(collection, dataArray,
 
 	with(collection, {
 	ilapply(id, function(id, i)
-		preparer(Sprintf('%{outputDirTransform}s/%{id}s.jpg'), dataArray[, , i], output = myoutput, ...));
+		preparer(Sprintf('%{outputDirTransform}s/%{id}s.jpg'), dataArray[, , i], output = myoutput, ...,
+			outputExtend = outputExtend[2]));
 	r = c(collection, list(outputDirAveragingPrepare = myoutput));
 	r
 })}

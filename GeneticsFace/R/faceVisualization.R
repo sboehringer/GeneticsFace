@@ -49,7 +49,8 @@ gridCoordsSymmetry = function(Npoints) {
 }
 
 # identity
-featureCenterCoordinate = function(meanGraph, structure)meanGraph[rep(structure[, 1], each = 2), ];
+featureCenterCoordinate = function(meanGraph, structure)
+	meanGraph[rep(structure[, 1], each = dim(meanGraph)[2]), ];
 # midpoint line segment
 featureCenterDistance = function(meanGraph, structure)t(apply(structure, 1, centerLine, meanGraph));
 # area centroid
@@ -60,17 +61,18 @@ featureCenterAngle = function(meanGraph, structure)meanGraph[c(t(structure)), ]
 
 # Compute color coefficients for each point in a grid based on each feature
 # Need to write description of arguments meanGraph=gr$graphs ; model= rClass$model; modelDesc=dataFeature$desc  
-gridColor = function(meanGraph, model, modelDesc, pars){
+gridColor = function(meanGraph, model, modelDesc, pars, offset = 1, dims = 1:2){
 	#### Construct a grid of Npoints x Npoints points
 	grid = gridCoords(meanGraph, pars$Npoints);
 	iSymm = gridCoordsSymmetry(pars$Npoints);
   
 	#### Compute color coefficients
 	colorCoefficients = nlapply(modelDesc$features, function(feature) {
-		cfs = extractFeatureCoefficients(model, feature , type = 'feature', modelDesc);
+		cfs = extractFeatureCoefficients(model, feature , type = 'feature', modelDesc, offset = offset);
 
 		featureCenterFct = get(Sprintf('featureCenter%{feature}u'));
-		featureCenter = featureCenterFct(meanGraph, cfs$structure);
+		featureCenter0 = featureCenterFct(meanGraph, cfs$structure);
+		featureCenter = featureCenter0[, dims];
 
 		distFeature = t(apply(grid, 1, dstPointMatxPoints, feature = featureCenter));
 		Logs("Feature %{feature}s; #:%{countFeatures}d; #coef: %{countCoeff}d",
@@ -106,7 +108,7 @@ coloredPlots = function(feature, meanGraph, modelDesc, colorCoefficients, pars){
 		textxy(meanGraph[, 1], meanGraph[, 2], labs = 1:nrow(meanGraph), cex = 1, col = "red")
 		for (i in 1:nrow(modelDesc$structure$area)) {
 			ena = c(modelDesc$structure$area[i, ], modelDesc$structure$area[i, 1])
-			lines(meanGraph[ena, 1], meanGraph[ena, 2], lwd = 2)
+			lines(meanGraph[ena, 1], meanGraph[ena, 2], lwd = 2, col = pars$colorGraph)
 		}
 	}
 	dev.off();
@@ -120,7 +122,7 @@ collapseColorAverg=function(input, meanGraph, average, pars) with(pars, {
 	imgInput = readImage(input);
 	importance = resize(imgInput, gdim['extend', 1], gdim['extend', 2]);
 	# Image lives in IVth quadrant
-	importanceT = translate(importance, -c(gdim['mn', 1], odim[2] - gdim['mx', 2]), output.dim = odim);
+	importanceT = translate(importance, c(gdim['mn', 1], odim[2] - gdim['mx', 2]), output.dim = odim);
 	importancePlot = (MIXave * average^POWERave + MIXcol * importanceT[,, 1:3]^POWERcol);
 	importancePlot
 })
@@ -145,13 +147,17 @@ parsDefault = list(
 							# and background photo. 
 	POWERave = 2,			# numeric value in the range [0, Inf] for intensity of colors
 							#	for the background photo.
-	POWERcol = 2			# numeric value in the range [0, Inf] for intensity of colors
+	POWERcol = 2,			# numeric value in the range [0, Inf] for intensity of colors
 							#	for the importance image photo.
+	#colorGraph = '#a0a0a05f'
+	colorGraph = '#5f5f5f5f'
 );
 
-importancePlot = function(meanGraph, model, modelDesc, pars = list(), output, average = NULL) {
+importancePlot = function(meanGraph, model, modelDesc, pars = list(), output, average = NULL,
+	offset = 1, dir.create = TRUE) {
 	pars = merge.lists(parsDefault, pars);
-	colorCoefficients = gridColor(meanGraph, model, modelDesc, pars)
+	if (dir.create) Dir.create(output, recursive = T, treatPathAsFile = T);
+	colorCoefficients = gridColor(meanGraph, model, modelDesc, pars, offset = offset)
 	r = lapply(c(modelDesc$features, 'all'), function(feature) {
 		pathImportance = Sprintf('%{output}s-%{feature}s.png');
 		writeImage(
@@ -170,7 +176,7 @@ importancePlots = function(coords, groups, models, modelDesc, pars = list(), out
 	Dir.create(outputDir);
 	ilapply(levels(groups), function(group, i) {
 		grs = symmetrizedAverageGraph(coords[,, groups == group], flip = TRUE, extend = globalExtend);
-		average = channel(readImage(files = Sprintf('%{averageInput}s/%{group}s.tif')), 'rgb');  
+		average = channel(readImage(files = Sprintf('%{averageInput}s/%{group}s.tif')), 'rgb');
 		importancePlot(grs, models[,i , drop = F], modelDesc, average = average,
 			output = Sprintf('%{outputDir}s/importance-%{group}s'),
 			pars = list(TRIANGULATION = plotTriangulation));
